@@ -1,4 +1,4 @@
-"""Install and validate exactly one ABI wheel on a clean runner."""
+"""Install and validate exactly one wheel on a fresh GitHub runner."""
 
 import hashlib
 import json
@@ -6,7 +6,6 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-import venv
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,25 +15,25 @@ def run(*args, env=None) -> None:
     subprocess.run([str(arg) for arg in args], env=env, check=True)
 
 
-def create_test_environment() -> None:
-    environment = Path(".test-venv").resolve()
-    venv.EnvBuilder(with_pip=True).create(environment)
-    python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-
+def bootstrap() -> None:
     requirements = ["packaging", "pytest", "numpy"]
     requirements += {
         "linux": ["auditwheel"],
         "darwin": ["delocate==0.13.0"],
         "win32": ["delvewheel==1.13.1", "pefile"],
     }[sys.platform]
-    run(python, "-m", "pip", "install", *requirements)
-
-    env = {**os.environ, "PATH": str(python.parent) + os.pathsep + os.environ["PATH"]}
-    run(python, Path(__file__).resolve(), "--inside-venv", env=env)
+    run(
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "--only-binary=:all:",
+        *requirements,
+    )
+    run(sys.executable, Path(__file__).resolve(), "--ready")
 
 
 def test_wheel() -> None:
-    # Import only inside the test venv so the workflow itself needs no launcher deps.
     from packaging.tags import sys_tags
     from packaging.utils import parse_wheel_filename
 
@@ -61,7 +60,7 @@ def test_wheel() -> None:
     os.environ["GDAL_DRIVER_PATH"] = "disable"
     os.environ["PROJ_NETWORK"] = "OFF"
 
-    # numpy/pytest are already installed in this isolated venv.
+    # NumPy and pytest are already present; install only the wheel itself.
     run(sys.executable, "-m", "pip", "install", "--no-deps", wheel)
     run(sys.executable, ROOT / "ci/inspect-wheel.py", wheel)
     run(
@@ -99,10 +98,10 @@ def test_wheel() -> None:
 
 
 def main() -> None:
-    if "--inside-venv" in sys.argv:
+    if "--ready" in sys.argv:
         test_wheel()
     else:
-        create_test_environment()
+        bootstrap()
 
 
 if __name__ == "__main__":

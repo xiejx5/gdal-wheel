@@ -1,2 +1,1 @@
 -r native-requirements.txt
-cibuildwheel==3.3.0

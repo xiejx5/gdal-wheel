@@ -15,16 +15,13 @@ PREFIX = Path(os.environ["BUILD_PREFIX"]).resolve()
 WORK = ROOT / "build" / "native"
 LOCK = json.loads((ROOT / "ci/dependencies.json").read_text())
 NATIVE_TOOLS = (ROOT / "ci/native-requirements.txt").read_text()
+CACHE_SCHEMA = (ROOT / "ci/native-cache-version.txt").read_text().strip()
 WINDOWS = os.name == "nt"
 MACOS = platform.system() == "Darwin"
 JOBS = str(os.cpu_count() or 2)
 
-# Bump this only when the way third-party dependencies are configured changes.
-# Ordinary refactors of this file should not force every dependency to rebuild.
-DEPENDENCY_RECIPE_VERSION = 2
 
-
-def run(*args, cwd=None):
+def run(*args, cwd=None) -> None:
     print("+", *map(str, args), flush=True)
     subprocess.run([str(arg) for arg in args], cwd=cwd, check=True)
 
@@ -35,15 +32,21 @@ def digest(value) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
 
 
-def dependency_key(name: str, record: dict) -> str:
-    return digest(
-        {
-            "recipe": DEPENDENCY_RECIPE_VERSION,
-            "name": name,
-            "record": record,
-            "native_tools": NATIVE_TOOLS,
-        }
-    )
+def stamp_matches(path: Path, value: str) -> bool:
+    return path.is_file() and path.read_text() == value
+
+
+def write_stamp(path: Path, value: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(value)
+
+
+def platform_name() -> str:
+    if WINDOWS:
+        return "windows-x86_64"
+    if MACOS:
+        return "macos-arm64"
+    return "linux-x86_64"
 
 
 def cmake(source: Path, name: str, options: list[str]) -> None:
@@ -59,7 +62,16 @@ def cmake(source: Path, name: str, options: list[str]) -> None:
         "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF",
         "-DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF",
         "-DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF",
+        "-DCMAKE_INSTALL_MESSAGE=LAZY",
     ]
+
+    if not WINDOWS:
+        # O2 materially shortens large C/C++ builds compared with the usual O3
+        # Release flags while remaining an optimized production build.
+        common += [
+            "-DCMAKE_C_FLAGS_RELEASE=-O2 -DNDEBUG",
+            "-DCMAKE_CXX_FLAGS_RELEASE=-O2 -DNDEBUG",
+        ]
 
     if MACOS:
         common += [
@@ -90,8 +102,8 @@ def cmake(source: Path, name: str, options: list[str]) -> None:
         *common,
         *(f"-D{option}" for option in options),
     )
-    run("cmake", "--build", binary, "--parallel", JOBS)
-    run("cmake", "--install", binary)
+    # Building the install target directly avoids a second CMake/Ninja pass.
+    run("cmake", "--build", binary, "--target", "install", "--parallel", JOBS)
 
 
 def save_licenses(name: str, source: Path) -> None:
@@ -103,10 +115,22 @@ def save_licenses(name: str, source: Path) -> None:
                 shutil.copy2(path, destination / path.name)
 
 
+def dependency_key(name: str, record: dict) -> str:
+    return digest(
+        {
+            "schema": CACHE_SCHEMA,
+            "platform": platform_name(),
+            "name": name,
+            "record": record,
+            "native_tools": NATIVE_TOOLS,
+        }
+    )
+
+
 def build_dependency(name: str, record: dict) -> None:
     stamp = PREFIX / "share/stamps" / name
     fingerprint = dependency_key(name, record)
-    if stamp.exists() and stamp.read_text() == fingerprint:
+    if stamp_matches(stamp, fingerprint):
         print(f"Using cached {name}", flush=True)
         return
 
@@ -124,8 +148,7 @@ def build_dependency(name: str, record: dict) -> None:
             "--enable-rtree",
             cwd=source,
         )
-        run("make", f"-j{JOBS}", cwd=source)
-        run("make", "install", cwd=source)
+        run("make", f"-j{JOBS}", "install", cwd=source)
     elif name == "openssl":
         target = "darwin64-arm64-cc" if MACOS else "linux-x86_64"
         run(
@@ -138,33 +161,37 @@ def build_dependency(name: str, record: dict) -> None:
             "--libdir=lib",
             cwd=source,
         )
-        run("make", f"-j{JOBS}", cwd=source)
-        run("make", "install_sw", cwd=source)
+        run("make", f"-j{JOBS}", "install_sw", cwd=source)
     else:
         cmake(source / record["subdir"], name, record["cmake"])
 
     save_licenses(name, source)
-    stamp.parent.mkdir(parents=True, exist_ok=True)
-    stamp.write_text(fingerprint)
+    write_stamp(stamp, fingerprint)
 
 
 def configure_environment() -> None:
     os.environ["PATH"] = str(PREFIX / "bin") + os.pathsep + os.environ["PATH"]
     os.environ["PKG_CONFIG_LIBDIR"] = str(PREFIX / "lib/pkgconfig")
     os.environ["PKG_CONFIG_PATH"] = str(PREFIX / "lib/pkgconfig")
+    os.environ["CMAKE_BUILD_PARALLEL_LEVEL"] = JOBS
 
-    if not WINDOWS:
-        os.environ["CPPFLAGS"] = f"-I{PREFIX}/include"
-        os.environ["LDFLAGS"] = f"-L{PREFIX}/lib -Wl,-rpath,{PREFIX}/lib"
-        flags = "-O2 -fPIC"
-        if MACOS:
-            flags += " -arch arm64 -mmacosx-version-min=11.0"
-        os.environ["CFLAGS"] = flags
-        os.environ["CXXFLAGS"] = flags
-        os.environ["LD_LIBRARY_PATH"] = str(PREFIX / "lib")
+    if WINDOWS:
+        return
+
+    os.environ["MAKEFLAGS"] = f"-j{JOBS}"
+    os.environ["CPPFLAGS"] = f"-I{PREFIX}/include"
+    os.environ["LDFLAGS"] = f"-L{PREFIX}/lib -Wl,-rpath,{PREFIX}/lib"
+    flags = "-O2 -pipe -fPIC"
 
     if MACOS:
+        flags += " -arch arm64 -mmacosx-version-min=11.0"
         os.environ["MACOSX_DEPLOYMENT_TARGET"] = "11.0"
+        os.environ["DYLD_LIBRARY_PATH"] = str(PREFIX / "lib")
+    else:
+        os.environ["LD_LIBRARY_PATH"] = str(PREFIX / "lib")
+
+    os.environ["CFLAGS"] = flags
+    os.environ["CXXFLAGS"] = flags
 
 
 def gdal_options() -> list[str]:
@@ -203,7 +230,17 @@ def gdal_options() -> list[str]:
         enabled = not (WINDOWS and dependency == "HDF4")
         options.append(f"GDAL_USE_{dependency}={'ON' if enabled else 'OFF'}")
 
-    raster_drivers = ("GTIFF", "VRT", "HDF4", "HDF5", "NETCDF", "PNG", "JPEG", "WEBP", "JP2OPENJPEG")
+    raster_drivers = (
+        "GTIFF",
+        "VRT",
+        "HDF4",
+        "HDF5",
+        "NETCDF",
+        "PNG",
+        "JPEG",
+        "WEBP",
+        "JP2OPENJPEG",
+    )
     for driver in raster_drivers:
         enabled = not (WINDOWS and driver == "HDF4")
         options.append(f"GDAL_ENABLE_DRIVER_{driver}={'ON' if enabled else 'OFF'}")
@@ -224,19 +261,66 @@ def verify_options(options: list[str]) -> None:
                 raise RuntimeError(f"Required option was not enabled: {key}")
 
 
+def build_gdal(release: dict, options: list[str]) -> str:
+    fingerprint = digest(
+        {
+            "schema": CACHE_SCHEMA,
+            "platform": platform_name(),
+            "release": release,
+            "lock": LOCK,
+            "native_tools": NATIVE_TOOLS,
+            "options": options,
+        }
+    )
+    stamp = PREFIX / "share/stamps/gdal"
+    if stamp_matches(stamp, fingerprint):
+        print("Using cached GDAL", flush=True)
+        return fingerprint
+
+    source = extract(
+        download(release["source"], ROOT / "build/gdal.tar.gz"),
+        WORK / "gdal",
+    )
+    cmake(source, "gdal", options)
+    verify_options(options)
+    save_licenses("gdal", source)
+    write_stamp(stamp, fingerprint)
+    return fingerprint
+
+
+def write_metadata(release: dict) -> None:
+    shutil.copy2(ROOT / "build/release.json", PREFIX / "release.json")
+    (PREFIX / "dependencies.json").write_text(json.dumps(LOCK, indent=2) + "\n")
+
+    from provenance import write
+
+    write(PREFIX, LOCK, release)
+
+
 def main() -> None:
     PREFIX.mkdir(parents=True, exist_ok=True)
     WORK.mkdir(parents=True, exist_ok=True)
 
     release = json.loads((ROOT / "build/release.json").read_text())
-    sdk_stamp = PREFIX / "sdk.sha256"
-    sdk_key = digest(
-        json.dumps([LOCK, release], sort_keys=True)
-        + Path(__file__).read_text()
-        + NATIVE_TOOLS
-        + (ROOT / "ci/provenance.py").read_text()
+    options = gdal_options()
+    gdal_fingerprint = digest(
+        {
+            "schema": CACHE_SCHEMA,
+            "platform": platform_name(),
+            "release": release,
+            "lock": LOCK,
+            "native_tools": NATIVE_TOOLS,
+            "options": options,
+        }
     )
-    if sdk_stamp.exists() and sdk_stamp.read_text() == sdk_key:
+    sdk_key = digest(
+        {
+            "gdal": gdal_fingerprint,
+            "provenance": (ROOT / "ci/provenance.py").read_text(),
+        }
+    )
+    sdk_stamp = PREFIX / "sdk.sha256"
+    if stamp_matches(sdk_stamp, sdk_key):
         print("Using complete cached native SDK", flush=True)
         return
 
@@ -246,21 +330,12 @@ def main() -> None:
         for name, record in LOCK["dependencies"].items():
             build_dependency(name, record)
 
-    source = extract(
-        download(release["source"], ROOT / "build/gdal.tar.gz"),
-        WORK / "gdal",
-    )
-    options = gdal_options()
-    cmake(source, "gdal", options)
-    verify_options(options)
+    actual_gdal_fingerprint = build_gdal(release, options)
+    if actual_gdal_fingerprint != gdal_fingerprint:
+        raise RuntimeError("Internal GDAL cache key mismatch")
 
-    shutil.copy2(ROOT / "build/release.json", PREFIX / "release.json")
-    (PREFIX / "dependencies.json").write_text(json.dumps(LOCK, indent=2) + "\n")
-
-    from provenance import write
-
-    write(PREFIX, LOCK, release)
-    sdk_stamp.write_text(sdk_key)
+    write_metadata(release)
+    write_stamp(sdk_stamp, sdk_key)
 
 
 if __name__ == "__main__":
