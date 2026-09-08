@@ -1,0 +1,63 @@
+{
+  "name": "gdal-wheel-dependencies",
+  "version-string": "1",
+  "builtin-baseline": "41c63ffe465ffa91d73af556b2757a5e78bee5ae",
+  "dependencies": [
+    "zlib",
+    "zstd",
+    "libjpeg-turbo",
+    "libpng",
+    "libwebp",
+    "lerc",
+    "openjpeg",
+    "openssl",
+    "expat",
+    "geos",
+    "libaec",
+    {
+      "name": "tiff",
+      "default-features": false,
+      "features": [
+        "jpeg",
+        "zstd",
+        "webp",
+        "lzma"
+      ]
+    },
+    {
+      "name": "sqlite3",
+      "features": [
+        "rtree"
+      ]
+    },
+    {
+      "name": "proj",
+      "default-features": false,
+      "features": [
+        "tiff"
+      ]
+    },
+    {
+      "name": "curl",
+      "default-features": false,
+      "features": [
+        "openssl"
+      ]
+    },
+    {
+      "name": "hdf5",
+      "default-features": false,
+      "features": [
+        "zlib",
+        "szip"
+      ]
+    },
+    {
+      "name": "netcdf-c",
+      "default-features": false,
+      "features": [
+        "netcdf-4"
+      ]
+    }
+  ]
+}

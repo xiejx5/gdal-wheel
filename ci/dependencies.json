@@ -1,0 +1,211 @@
+{
+  "vcpkg_baseline": "41c63ffe465ffa91d73af556b2757a5e78bee5ae",
+  "dependencies": {
+    "zlib": {
+      "version": "1.3.2",
+      "url": "https://codeload.github.com/madler/zlib/tar.gz/refs/tags/v1.3.2",
+      "sha256": "b99a0b86c0ba9360ec7e78c4f1e43b1cbdf1e6936c8fa0f6835c0cd694a495a1",
+      "subdir": "",
+      "cmake": []
+    },
+    "zstd": {
+      "version": "1.5.7",
+      "url": "https://codeload.github.com/facebook/zstd/tar.gz/refs/tags/v1.5.7",
+      "sha256": "37d7284556b20954e56e1ca85b80226768902e2edabd3b649e9e72c0c9012ee3",
+      "subdir": "build/cmake",
+      "cmake": [
+        "ZSTD_BUILD_PROGRAMS=OFF",
+        "ZSTD_BUILD_STATIC=OFF"
+      ]
+    },
+    "jpeg": {
+      "version": "3.1.4",
+      "url": "https://codeload.github.com/libjpeg-turbo/libjpeg-turbo/tar.gz/refs/tags/3.1.4",
+      "sha256": "3a581ad5a3060cee69487aae0bc71a1f3be94b89f92215e32b43742ec4a5055c",
+      "subdir": "",
+      "cmake": [
+        "ENABLE_STATIC=OFF",
+        "WITH_SIMD=OFF"
+      ]
+    },
+    "png": {
+      "version": "1.6.58",
+      "url": "https://codeload.github.com/pnggroup/libpng/tar.gz/refs/tags/v1.6.58",
+      "sha256": "a9d4df463d36a6e5f9c29bd6f4967312d17e996c1854f3511f833924eb1993cf",
+      "subdir": "",
+      "cmake": [
+        "PNG_TESTS=OFF",
+        "PNG_STATIC=OFF",
+        "PNG_TOOLS=OFF"
+      ]
+    },
+    "webp": {
+      "version": "1.6.0",
+      "url": "https://codeload.github.com/webmproject/libwebp/tar.gz/refs/tags/v1.6.0",
+      "sha256": "93a852c2b3efafee3723efd4636de855b46f9fe1efddd607e1f42f60fc8f2136",
+      "subdir": "",
+      "cmake": [
+        "WEBP_BUILD_ANIM_UTILS=OFF",
+        "WEBP_BUILD_CWEBP=OFF",
+        "WEBP_BUILD_DWEBP=OFF",
+        "WEBP_BUILD_GIF2WEBP=OFF",
+        "WEBP_BUILD_IMG2WEBP=OFF",
+        "WEBP_BUILD_VWEBP=OFF",
+        "WEBP_BUILD_WEBPINFO=OFF",
+        "WEBP_BUILD_WEBPMUX=OFF",
+        "WEBP_BUILD_EXTRAS=OFF"
+      ]
+    },
+    "lerc": {
+      "version": "4.0.0",
+      "url": "https://codeload.github.com/Esri/lerc/tar.gz/refs/tags/v4.0.0",
+      "sha256": "91431c2b16d0e3de6cbaea188603359f87caed08259a645fd5a3805784ee30a0",
+      "subdir": "",
+      "cmake": []
+    },
+    "tiff": {
+      "version": "4.7.1",
+      "url": "https://download.osgeo.org/libtiff/tiff-4.7.1.tar.gz",
+      "sha256": "f698d94f3103da8ca7438d84e0344e453fe0ba3b7486e04c5bf7a9a3fabe9b69",
+      "subdir": "",
+      "cmake": [
+        "tiff-tools=OFF",
+        "tiff-tests=OFF",
+        "tiff-contrib=OFF",
+        "tiff-docs=OFF",
+        "lzma=OFF",
+        "zstd=ON",
+        "webp=ON",
+        "lerc=ON"
+      ]
+    },
+    "openjpeg": {
+      "version": "2.5.4",
+      "url": "https://codeload.github.com/uclouvain/openjpeg/tar.gz/refs/tags/v2.5.4",
+      "sha256": "a695fbe19c0165f295a8531b1e4e855cd94d0875d2f88ec4b61080677e27188a",
+      "subdir": "",
+      "cmake": [
+        "BUILD_CODEC=OFF"
+      ]
+    },
+    "sqlite": {
+      "version": "3.53.1",
+      "url": "https://www.sqlite.org/2026/sqlite-autoconf-3530100.tar.gz",
+      "sha256": "83e6b2020a034e9a7ad4a72feea59e1ad52f162e09cbd26735a3ffb98359fc4f",
+      "subdir": "",
+      "cmake": []
+    },
+    "openssl": {
+      "version": "3.6.2",
+      "url": "https://codeload.github.com/openssl/openssl/tar.gz/refs/tags/openssl-3.6.2",
+      "sha256": "bc7dc809d1842e4a9c190765d83fb6a88084c75c8b04b4c3c304a929d33a5108",
+      "subdir": "",
+      "cmake": []
+    },
+    "curl": {
+      "version": "8.20.0",
+      "url": "https://curl.se/download/curl-8.20.0.tar.gz",
+      "sha256": "fc5819cad3f9f5482669adcdc49a782c15f36d2a0715b395b06d9173593d2dc0",
+      "subdir": "",
+      "cmake": [
+        "BUILD_CURL_EXE=OFF",
+        "BUILD_LIBCURL_DOCS=OFF",
+        "BUILD_MISC_DOCS=OFF",
+        "CURL_USE_OPENSSL=ON",
+        "CURL_USE_LIBPSL=OFF",
+        "CURL_USE_LIBSSH2=OFF",
+        "CURL_USE_GSSAPI=OFF",
+        "USE_NGHTTP2=OFF",
+        "CURL_BROTLI=OFF"
+      ]
+    },
+    "expat": {
+      "version": "2.8.3",
+      "url": "https://codeload.github.com/libexpat/libexpat/tar.gz/refs/tags/R_2_8_3",
+      "sha256": "533659a16e0184035a99fd8e783f1ad61a887a7bf8586a8681740b9d7ed42389",
+      "subdir": "expat",
+      "cmake": [
+        "EXPAT_BUILD_TOOLS=OFF",
+        "EXPAT_BUILD_EXAMPLES=OFF",
+        "EXPAT_BUILD_TESTS=OFF",
+        "EXPAT_SHARED_LIBS=ON"
+      ]
+    },
+    "proj": {
+      "version": "9.8.1",
+      "url": "https://download.osgeo.org/proj/proj-9.8.1.tar.gz",
+      "sha256": "af5b731c145c1d13c4e3b4eeb7d167e94e845e440f71e3496b4ed8dae0291960",
+      "subdir": "",
+      "cmake": [
+        "BUILD_APPS=OFF",
+        "ENABLE_CURL=ON",
+        "ENABLE_TIFF=ON"
+      ]
+    },
+    "geos": {
+      "version": "3.14.1",
+      "url": "https://download.osgeo.org/geos/geos-3.14.1.tar.bz2",
+      "sha256": "3c20919cda9a505db07b5216baa980bacdaa0702da715b43f176fb07eff7e716",
+      "subdir": "",
+      "cmake": [
+        "BUILD_BENCHMARKS=OFF",
+        "BUILD_DOCUMENTATION=OFF"
+      ]
+    },
+    "aec": {
+      "version": "1.1.4",
+      "url": "https://codeload.github.com/MathisRosenhauer/libaec/tar.gz/refs/tags/v1.1.4",
+      "sha256": "7a64324a37f75f96ca8e0f6d1ad9d13057b013bb5a05298c43469f6476a40232",
+      "subdir": "",
+      "cmake": []
+    },
+    "hdf4": {
+      "version": "4.3.1",
+      "url": "https://codeload.github.com/HDFGroup/hdf4/tar.gz/refs/tags/hdf4.3.1",
+      "sha256": "6dc3b8af610526788bf78fb3982b25a80abfc94e37ce0c3ae2929b5e9c937093",
+      "subdir": "",
+      "cmake": [
+        "HDF4_BUILD_TOOLS=OFF",
+        "HDF4_BUILD_EXAMPLES=OFF",
+        "HDF4_BUILD_FORTRAN=OFF",
+        "HDF4_ENABLE_NETCDF=OFF",
+        "HDF4_ENABLE_Z_LIB_SUPPORT=ON",
+        "HDF4_ENABLE_JPEG_LIB_SUPPORT=ON",
+        "HDF4_ENABLE_SZIP_SUPPORT=OFF"
+      ]
+    },
+    "hdf5": {
+      "version": "1.14.6",
+      "url": "https://codeload.github.com/HDFGroup/hdf5/tar.gz/refs/tags/hdf5_1.14.6",
+      "sha256": "09ee1c671a87401a5201c06106650f62badeea5a3b3941e9b1e2e1e08317357f",
+      "subdir": "",
+      "cmake": [
+        "HDF5_BUILD_CPP_LIB=OFF",
+        "HDF5_BUILD_FORTRAN=OFF",
+        "HDF5_BUILD_TOOLS=OFF",
+        "HDF5_BUILD_EXAMPLES=OFF",
+        "HDF5_ENABLE_Z_LIB_SUPPORT=ON",
+        "HDF5_ENABLE_SZIP_SUPPORT=ON",
+        "HDF5_ENABLE_SZIP_ENCODING=ON",
+        "HDF5_ALLOW_EXTERNAL_SUPPORT=NO"
+      ]
+    },
+    "netcdf": {
+      "version": "4.9.3",
+      "url": "https://codeload.github.com/Unidata/netcdf-c/tar.gz/refs/tags/v4.9.3",
+      "sha256": "990f46d49525d6ab5dc4249f8684c6deeaf54de6fec63a187e9fb382cc0ffdff",
+      "subdir": "",
+      "cmake": [
+        "ENABLE_TESTS=OFF",
+        "ENABLE_EXAMPLES=OFF",
+        "ENABLE_UTILITIES=OFF",
+        "ENABLE_DAP=OFF",
+        "ENABLE_NCZARR=OFF",
+        "ENABLE_HDF4=OFF",
+        "ENABLE_NETCDF_4=ON",
+        "ENABLE_BYTERANGE=OFF",
+        "ENABLE_PLUGINS=OFF"
+      ]
+    }
+  }
+}
