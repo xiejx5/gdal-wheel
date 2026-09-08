@@ -171,7 +171,6 @@ jobs:
         env:
           CIBW_ENVIRONMENT_LINUX: BUILD_PREFIX=/project/gdal-libs PATH=/project/gdal-libs/bin:$PATH LD_LIBRARY_PATH=/project/gdal-libs/lib
           CIBW_ENVIRONMENT_MACOS: BUILD_PREFIX="${{ github.workspace }}/gdal-libs" PATH="${{ github.workspace }}/gdal-libs/bin:$PATH" MACOSX_DEPLOYMENT_TARGET=11.0
-          CIBW_ENVIRONMENT_WINDOWS: BUILD_PREFIX="${{ github.workspace }}/gdal-libs"
           CIBW_BEFORE_BUILD_WINDOWS: python -m pip install delvewheel==1.13.1
           CIBW_REPAIR_WHEEL_COMMAND: python {project}/ci/repair-wheel.py {wheel} {dest_dir}
 
