@@ -8,3 +8,4 @@ __pycache__/
 /.test-venv/
 /test-result.json
 /feature-tests.xml
+.DS_Store

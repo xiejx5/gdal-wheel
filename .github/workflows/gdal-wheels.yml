@@ -27,8 +27,8 @@ jobs:
     outputs:
       version: ${{ steps.resolve.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - id: resolve
@@ -37,7 +37,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REQUESTED_VERSION: ${{ inputs.gdal_version }}
         run: python ci/sources.py --version "$REQUESTED_VERSION"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: verified-source
           path: |
@@ -45,6 +45,7 @@ jobs:
             build/gdal.tar.gz
             build/bindings.tar.gz
           if-no-files-found: error
+          compression-level: 0
 
   build:
     needs: source
@@ -55,7 +56,7 @@ jobs:
           - os: ubuntu-24.04
             platform: linux-x86_64
             arch: x86_64
-          - os: macos-14
+          - os: macos-15
             platform: macos-arm64
             arch: arm64
           - os: windows-2022
@@ -67,34 +68,47 @@ jobs:
       BUILD_PREFIX: ${{ github.workspace }}/gdal-libs
       CIBW_ARCHS: ${{ matrix.arch }}
       VCPKG_BINARY_SOURCES: 'clear;files,${{ github.workspace }}/build/vcpkg-cache,readwrite'
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: verified-source
           path: build
-      - name: Build tools
+
+      - name: Install build tools
         run: python -m pip install -r ci/build-requirements.txt
-      - uses: actions/cache@v4
+
+      # The cache key is deliberately independent of workflow/script edits.
+      # Fine-grained stamps in build-native.py decide what actually needs rebuilding.
+      - name: Restore native cache
+        id: native-cache
+        continue-on-error: true
+        uses: actions/cache/restore@v6
         with:
           path: |
             gdal-libs
             build/downloads
             build/vcpkg-cache
-          key: native-${{ matrix.os }}-${{ hashFiles('ci/build-native*', 'ci/provenance.py', 'ci/dependencies.json', 'ci/vcpkg.json', 'ci/triplets/*', 'ci/build-requirements.txt', '.github/workflows/gdal-wheels.yml') }}-${{ needs.source.outputs.version }}
-          restore-keys: native-${{ matrix.os }}-${{ hashFiles('ci/build-native*', 'ci/provenance.py', 'ci/dependencies.json', 'ci/vcpkg.json', 'ci/triplets/*', 'ci/build-requirements.txt', '.github/workflows/gdal-wheels.yml') }}-
+          key: native-v2-${{ matrix.os }}-${{ hashFiles('ci/dependencies.json', 'ci/native-requirements.txt', 'ci/vcpkg.json', 'ci/triplets/*') }}-${{ needs.source.outputs.version }}-${{ github.run_id }}
+          restore-keys: |
+            native-v2-${{ matrix.os }}-${{ hashFiles('ci/dependencies.json', 'ci/native-requirements.txt', 'ci/vcpkg.json', 'ci/triplets/*') }}-${{ needs.source.outputs.version }}-
+            native-v2-${{ matrix.os }}-${{ hashFiles('ci/dependencies.json', 'ci/native-requirements.txt', 'ci/vcpkg.json', 'ci/triplets/*') }}-
+
       - name: Activate MSVC
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
+
       - name: Build Windows shared SDK
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./ci/build-native-windows.ps1
+
       - name: Build macOS shared SDK
         if: runner.os == 'macOS'
         env:
@@ -102,34 +116,58 @@ jobs:
           CMAKE_OSX_DEPLOYMENT_TARGET: '11.0'
           CMAKE_OSX_ARCHITECTURES: arm64
         run: python ci/build-native.py
+
       - name: Prepare upstream bindings
         if: runner.os != 'Linux'
         run: python ci/prepare-bindings.py
-      - name: Build Linux SDK once in the wheel's manylinux image
+
+      - name: Build Linux SDK in manylinux_2_28
         if: runner.os == 'Linux'
         run: |
           docker run --rm -v "$PWD:/project" -w /project \
             -e BUILD_PREFIX=/project/gdal-libs \
             "$CIBW_MANYLINUX_X86_64_IMAGE" \
-            bash -euc 'export PATH=/opt/python/cp312-cp312/bin:$PATH; python -m pip install -r ci/build-requirements.txt; python ci/build-native.py; python ci/prepare-bindings.py'
-      - name: Build and repair all four Python ABIs against the shared SDK
+            bash -euc '
+              dnf -y --setopt=install_weak_deps=False install perl-IPC-Cmd
+              dnf clean all
+              export PATH=/opt/python/cp312-cp312/bin:$PATH
+              python -m pip install -r ci/native-requirements.txt
+              python ci/build-native.py
+              python ci/prepare-bindings.py
+            '
+
+      - name: Build and repair Python wheels
         env:
           CIBW_ENVIRONMENT_LINUX: 'BUILD_PREFIX=/project/gdal-libs PATH=/project/gdal-libs/bin:$PATH LD_LIBRARY_PATH=/project/gdal-libs/lib'
           CIBW_ENVIRONMENT_MACOS: 'BUILD_PREFIX="${{ github.workspace }}/gdal-libs" PATH="${{ github.workspace }}/gdal-libs/bin:$PATH" MACOSX_DEPLOYMENT_TARGET=11.0'
           CIBW_ENVIRONMENT_WINDOWS: 'BUILD_PREFIX="${{ github.workspace }}/gdal-libs"'
           CIBW_BEFORE_BUILD_WINDOWS: 'python -m pip install delvewheel==1.13.1'
           CIBW_REPAIR_WHEEL_COMMAND: 'python {project}/ci/repair-wheel.py {wheel} {dest_dir}'
-          CIBW_TEST_REQUIRES: numpy
-          CIBW_TEST_COMMAND: 'python -c "from osgeo import gdal, ogr, osr, gdal_array; print(gdal.VersionInfo())"'
         run: python -m cibuildwheel build/python --output-dir wheelhouse
-      - uses: actions/upload-artifact@v4
+
+      - uses: actions/upload-artifact@v7
         with:
           name: wheels-${{ matrix.platform }}
           path: wheelhouse/*.whl
           if-no-files-found: error
+          compression-level: 0
+
+      # Save even after a failed native build. Completed dependency stamps make
+      # the next run resume instead of recompiling everything from scratch.
+      - name: Save native cache
+        if: always()
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            gdal-libs
+            build/downloads
+            build/vcpkg-cache
+          key: native-v2-${{ matrix.os }}-${{ hashFiles('ci/dependencies.json', 'ci/native-requirements.txt', 'ci/vcpkg.json', 'ci/triplets/*') }}-${{ needs.source.outputs.version }}-${{ github.run_id }}
+
       - name: Preserve native configuration
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-logs-${{ matrix.platform }}
           path: |
@@ -146,25 +184,23 @@ jobs:
         target:
           - os: ubuntu-24.04
             platform: linux-x86_64
-          - os: macos-14
+          - os: macos-15
             platform: macos-arm64
           - os: windows-2022
             platform: windows-x86_64
     runs-on: ${{ matrix.target.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: wheels-${{ matrix.target.platform }}
           path: wheelhouse
-      - name: Install test launcher
-        run: python -m pip install packaging
       - name: Test repaired wheel on a fresh runner
         run: python ci/clean-test.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: result-${{ matrix.target.platform }}-${{ matrix.python }}
@@ -177,20 +213,20 @@ jobs:
     needs: [source, clean-test]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: wheels-*
           merge-multiple: true
           path: wheelhouse
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: result-*
           path: results
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: verified-source
           path: build
@@ -199,8 +235,9 @@ jobs:
         env:
           REPOSITORY: ${{ github.repository }}
         run: python ci/generate-manifest.py --repository "$REPOSITORY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: tested-release
           path: wheelhouse/*
           if-no-files-found: error
+          compression-level: 0
