@@ -25,7 +25,10 @@
       "subdir": "",
       "cmake": [
         "ENABLE_STATIC=OFF",
-        "WITH_SIMD=OFF"
+        "WITH_SIMD=OFF",
+        "WITH_TURBOJPEG=OFF",
+        "WITH_TOOLS=OFF",
+        "WITH_TESTS=OFF"
       ]
     },
     "png": {
@@ -116,7 +119,11 @@
         "CURL_USE_LIBSSH2=OFF",
         "CURL_USE_GSSAPI=OFF",
         "USE_NGHTTP2=OFF",
-        "CURL_BROTLI=OFF"
+        "CURL_BROTLI=OFF",
+        "CURL_DISABLE_LDAP=ON",
+        "USE_LIBIDN2=OFF",
+        "CURL_USE_LIBSSH=OFF",
+        "CURL_USE_GSASL=OFF"
       ]
     },
     "expat": {
@@ -171,7 +178,9 @@
         "HDF4_ENABLE_NETCDF=OFF",
         "HDF4_ENABLE_Z_LIB_SUPPORT=ON",
         "HDF4_ENABLE_JPEG_LIB_SUPPORT=ON",
-        "HDF4_ENABLE_SZIP_SUPPORT=OFF"
+        "HDF4_ENABLE_SZIP_SUPPORT=OFF",
+        "BUILD_STATIC_LIBS=OFF",
+        "HDF4_BUILD_NETCDF_TOOLS=OFF"
       ]
     },
     "hdf5": {
@@ -187,7 +196,9 @@
         "HDF5_ENABLE_Z_LIB_SUPPORT=ON",
         "HDF5_ENABLE_SZIP_SUPPORT=ON",
         "HDF5_ENABLE_SZIP_ENCODING=ON",
-        "HDF5_ALLOW_EXTERNAL_SUPPORT=NO"
+        "HDF5_ALLOW_EXTERNAL_SUPPORT=NO",
+        "BUILD_STATIC_LIBS=OFF",
+        "HDF5_BUILD_HL_LIB=ON"
       ]
     },
     "netcdf": {
@@ -196,15 +207,17 @@
       "sha256": "990f46d49525d6ab5dc4249f8684c6deeaf54de6fec63a187e9fb382cc0ffdff",
       "subdir": "",
       "cmake": [
-        "ENABLE_TESTS=OFF",
-        "ENABLE_EXAMPLES=OFF",
-        "ENABLE_UTILITIES=OFF",
-        "ENABLE_DAP=OFF",
-        "ENABLE_NCZARR=OFF",
-        "ENABLE_HDF4=OFF",
-        "ENABLE_NETCDF_4=ON",
-        "ENABLE_BYTERANGE=OFF",
-        "ENABLE_PLUGINS=OFF"
+        "NETCDF_ENABLE_TESTS=OFF",
+        "NETCDF_ENABLE_EXAMPLES=OFF",
+        "NETCDF_BUILD_UTILITIES=OFF",
+        "NETCDF_ENABLE_DAP=OFF",
+        "NETCDF_ENABLE_NCZARR=OFF",
+        "NETCDF_ENABLE_HDF4=OFF",
+        "NETCDF_ENABLE_HDF5=ON",
+        "NETCDF_ENABLE_BYTERANGE=OFF",
+        "NETCDF_ENABLE_PLUGINS=OFF",
+        "NETCDF_ENABLE_LIBXML2=OFF",
+        "NETCDF_ENABLE_REMOTE_FUNCTIONALITY=OFF"
       ]
     }
   }
