@@ -7,6 +7,19 @@ import sys
 from packaging.tags import sys_tags
 from packaging.utils import parse_wheel_filename
 
+# Each verification job creates its own venv; no build prefix or SDK is downloaded.
+if '--inside-venv' not in sys.argv:
+    import venv
+    environment = Path('.test-venv').resolve()
+    venv.EnvBuilder(with_pip=True).create(environment)
+    python = environment / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
+    requirements = ['packaging', 'pytest', 'numpy']
+    requirements += {'linux':['auditwheel'], 'darwin':['delocate==0.13.0'], 'win32':['delvewheel==1.13.1','pefile']}[sys.platform]
+    subprocess.run([python, '-m', 'pip', 'install', *requirements], check=True)
+    environment_vars = {**os.environ, 'PATH': str(python.parent) + os.pathsep + os.environ['PATH']}
+    subprocess.run([python, Path(__file__).resolve(), '--inside-venv'], env=environment_vars, check=True)
+    sys.exit(0)
+
 root = Path(__file__).resolve().parents[1]
 compatible = set(sys_tags())
 wheels = [p for p in (root / 'wheelhouse').glob('*.whl') if parse_wheel_filename(p.name)[3] & compatible]
