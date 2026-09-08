@@ -66,7 +66,12 @@ def main() -> None:
     if licenses.exists():
         shutil.copytree(licenses, osgeo / "data/licenses")
 
-    for name in ("release.json", "dependencies.json", "provenance.json", "sbom.cdx.json"):
+    for name in (
+        "release.json",
+        "dependencies.json",
+        "provenance.json",
+        "sbom.cdx.json",
+    ):
         shutil.copy2(prefix / name, osgeo / "data" / name)
 
     with (osgeo / "__init__.py").open("a") as stream:
