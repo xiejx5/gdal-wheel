@@ -2,7 +2,7 @@
 
 Unofficial, self-contained wheels of upstream [`GDAL`](https://github.com/OSGeo/gdal), including NumPy bindings. No system GDAL installation is needed. Wheels are intended for GitHub Releases, never the official GDAL project on PyPI.
 
-**Status: initial build validation. No release has been published yet.** The first target is dynamically resolved from official stable upstream releases (currently 3.13.3). Automatic scheduling and publication will be added after the manual build passes on all three platforms.
+**Status: automated release pipeline.** The target is dynamically resolved from official stable upstream releases. A daily scheduled workflow builds and publishes a new GitHub Release when upstream GDAL advances; manual runs remain available for validation or a specific version.
 
 | Platform | Python | HDF4 / MODIS HDF-EOS2 | HDF5 / netCDF |
 |---|---|---|---|
@@ -16,7 +16,7 @@ MODIS LAI/FPAR products such as MOD15A2H and MCD15A2H are distributed as HDF-EOS
 
 ## Build
 
-Run **Actions → GDAL wheels → Run workflow**. Leave the version blank for the latest stable release, or supply a version such as `3.13.3`.
+Run **Actions → GDAL wheels → Run workflow**. Leave the version blank for the latest stable release, or supply a version such as `3.13.3`. The same workflow runs daily at 03:17 UTC and skips versions that already have a published `gdal-v<version>` release.
 
 The workflow:
 
@@ -25,9 +25,10 @@ The workflow:
 3. Builds all four Python ABIs against that SDK using cibuildwheel. The only Python package modifications are explicit SDK paths, bundled data/notices, and a small data-path bootstrap.
 4. Repairs wheels with auditwheel, delocate, or delvewheel, preserving their native-library isolation mechanisms.
 5. Installs the repaired wheels in **12 fresh runner jobs**, tests real features, and inspects native links. Python 3.12 also tests both import orders with Rasterio and Fiona.
-6. Requires all 12 successful results before generating `manifest.json`, wheel SHA256 sidecars, and a hash-linked `index.html` in the `tested-release` Actions artifact.
+6. Requires all 12 successful results before generating `manifest.json`, wheel SHA256 sidecars, and a hash-linked `index.html`.
+7. Creates a draft GitHub Release tagged `gdal-v<version>`, uploads the tested wheels and metadata, and publishes it only after all assets are present. A failed upload can be resumed by the next scheduled run.
 
-Actions artifacts are validation outputs, not permanent distribution. A release/index URL will be documented once publication is validated.
+Actions artifacts are intermediate validation outputs. Permanent distribution is through the GitHub Release assets; the generated `index.html` links to those assets with SHA256 fragments.
 
 ## Keeping compilation fast
 

@@ -1,6 +1,9 @@
 name: GDAL wheels
 
 on:
+  schedule:
+    # Check upstream once per day. Scheduled workflows run from the default branch.
+    - cron: '17 3 * * *'
   workflow_dispatch:
     inputs:
       gdal_version:
@@ -26,6 +29,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.resolve.outputs.version }}
+      should_build: ${{ steps.decide.outputs.should_build }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -37,9 +41,26 @@ jobs:
         name: Verify official release and Python sdist
         env:
           GH_TOKEN: ${{ github.token }}
-          REQUESTED_VERSION: ${{ inputs.gdal_version }}
+          REQUESTED_VERSION: ${{ github.event.inputs.gdal_version || '' }}
         run: python ci/sources.py --version "$REQUESTED_VERSION"
+      - id: decide
+        name: Skip already published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          tag="gdal-v${VERSION}"
+          state="$(gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" --json isDraft --jq '.isDraft' 2>/dev/null || echo missing)"
+          if [[ "${state}" == "false" ]]; then
+            echo "${tag} is already published; nothing to build."
+            echo "should_build=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "Building ${tag}."
+            echo "should_build=true" >> "${GITHUB_OUTPUT}"
+          fi
       - uses: actions/upload-artifact@v7
+        if: steps.decide.outputs.should_build == 'true'
         with:
           name: verified-source
           path: |
@@ -51,6 +72,7 @@ jobs:
 
   build:
     needs: source
+    if: needs.source.outputs.should_build == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -204,7 +226,8 @@ jobs:
           key: native-v3-${{ matrix.platform }}-${{ hashFiles('ci/dependencies.json', 'ci/vcpkg.json', 'ci/triplets/*') }}-${{ hashFiles('ci/native-requirements.txt', 'ci/native-cache-version.txt') }}-${{ needs.source.outputs.version }}-partial-${{ github.run_id }}
 
   clean-test:
-    needs: build
+    needs: [source, build]
+    if: needs.source.outputs.should_build == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -241,6 +264,7 @@ jobs:
 
   manifest:
     needs: [source, clean-test]
+    if: needs.source.outputs.should_build == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -273,3 +297,43 @@ jobs:
           path: wheelhouse/*
           if-no-files-found: error
           compression-level: 0
+
+  publish:
+    name: Publish GitHub Release
+    needs: [source, manifest]
+    if: needs.source.outputs.should_build == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: tested-release
+          path: release
+      - name: Upload tested wheels and publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ needs.source.outputs.version }}
+          TARGET: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          tag="gdal-v${VERSION}"
+          state="$(gh release view "${tag}" --repo "${REPOSITORY}" --json isDraft --jq '.isDraft' 2>/dev/null || echo missing)"
+
+          if [[ "${state}" == "true" ]]; then
+            gh release upload "${tag}" release/* --repo "${REPOSITORY}" --clobber
+          elif [[ "${state}" == "missing" ]]; then
+            gh release create "${tag}" release/* \
+              --repo "${REPOSITORY}" \
+              --target "${TARGET}" \
+              --title "GDAL ${VERSION} wheels" \
+              --notes "Self-contained GDAL ${VERSION} wheels. All 12 wheel/platform combinations passed the clean-runner test matrix." \
+              --draft
+          else
+            echo "${tag} is already published; leaving it unchanged."
+            exit 0
+          fi
+
+          gh release edit "${tag}" --repo "${REPOSITORY}" --draft=false
