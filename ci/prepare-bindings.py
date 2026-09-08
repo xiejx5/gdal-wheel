@@ -21,7 +21,7 @@ for name in ('gdal', 'proj'):
     shutil.copytree(origin, osgeo / 'data' / name)
 if (prefix / 'share/licenses').exists():
     shutil.copytree(prefix / 'share/licenses', osgeo / 'data/licenses')
-for name in ('release.json', 'dependencies.json'):
+for name in ('release.json', 'dependencies.json', 'provenance.json', 'sbom.cdx.json'):
     shutil.copy2(prefix / name, osgeo / 'data' / name)
 with (osgeo / '__init__.py').open('a') as stream:
     stream.write('\n\n# Unofficial wheel: bundled data defaults.\n')

@@ -36,7 +36,8 @@ def cmake(source, name, options):
         vcpkg = Path(os.environ['VCPKG_INSTALLATION_ROOT'])
         common += [f'-DCMAKE_TOOLCHAIN_FILE={vcpkg}/scripts/buildsystems/vcpkg.cmake',
                    '-DVCPKG_TARGET_TRIPLET=x64-windows', '-DVCPKG_MANIFEST_MODE=OFF',
-                   f'-DVCPKG_INSTALLED_DIR={ROOT}/build/vcpkg_installed']
+                   f'-DVCPKG_INSTALLED_DIR={ROOT}/build/vcpkg_installed',
+                   f'-DVCPKG_OVERLAY_TRIPLETS={ROOT}/ci/triplets']
     run('cmake', '-S', source, '-B', binary, '-G', 'Ninja', *common, *['-D' + o for o in options])
     run('cmake', '--build', binary, '--parallel', JOBS)
     run('cmake', '--install', binary)
@@ -72,6 +73,12 @@ def build_dependency(name, record):
 if __name__ == '__main__':
     PREFIX.mkdir(parents=True, exist_ok=True)
     WORK.mkdir(parents=True, exist_ok=True)
+    release = json.loads((ROOT / 'build/release.json').read_text())
+    sdk_stamp = PREFIX / 'sdk.sha256'
+    sdk_key = hashlib.sha256((json.dumps([LOCK, release], sort_keys=True) + Path(__file__).read_text() + (ROOT / 'ci/provenance.py').read_text()).encode()).hexdigest()
+    if sdk_stamp.exists() and sdk_stamp.read_text() == sdk_key:
+        print('Using complete cached native SDK', flush=True)
+        raise SystemExit(0)
     os.environ['PATH'] = str(PREFIX / 'bin') + os.pathsep + os.environ['PATH']
     os.environ['PKG_CONFIG_LIBDIR'] = str(PREFIX / 'lib/pkgconfig')
     os.environ['PKG_CONFIG_PATH'] = str(PREFIX / 'lib/pkgconfig')
@@ -107,4 +114,7 @@ if __name__ == '__main__':
             if f'{key}:BOOL=ON' not in cache:
                 raise RuntimeError(f'Required option was not enabled: {key}')
     shutil.copy2(ROOT / 'build/release.json', PREFIX / 'release.json')
-    shutil.copy2(ROOT / 'ci/dependencies.json', PREFIX / 'dependencies.json')
+    (PREFIX / 'dependencies.json').write_text(json.dumps(LOCK, indent=2) + '\n')
+    from provenance import write
+    write(PREFIX, LOCK, release)
+    sdk_stamp.write_text(sdk_key)

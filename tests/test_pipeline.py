@@ -55,7 +55,7 @@ def make_release(tmp_path):
             (wheels / name).write_bytes(name.encode())
             report = results / f'{python}-{platform}'
             report.mkdir()
-            (report / 'test-result.json').write_text(json.dumps(dict(wheel=name, feature_tests='passed', leak_tests='passed', coexistence_tests='passed' if python=='cp312' else 'not-required', hdf4='not-supported' if platform.startswith('windows') else 'passed')))
+            (report / 'test-result.json').write_text(json.dumps(dict(wheel=name, sha256=hashlib.sha256(name.encode()).hexdigest(), feature_tests='passed', leak_tests='passed', coexistence_tests='passed' if python=='cp312' else 'not-required', hdf4='not-supported' if platform.startswith('windows') else 'passed')))
     return wheels, results
 
 def test_complete_release_has_integrity_links(tmp_path):
@@ -64,13 +64,15 @@ def test_complete_release_has_integrity_links(tmp_path):
     assert record['complete'] and len(record['wheels']) == 12
     assert (wheels / 'index.html').read_text().count('#sha256=') == 12
 
-@pytest.mark.parametrize('fault', ['missing-wheel','missing-test','failed-test','hdf4','coexistence'])
+@pytest.mark.parametrize('fault', ['missing-wheel','missing-test','failed-test','hdf4','coexistence','tampered-wheel'])
 def test_incomplete_release_rejected(tmp_path, fault):
     wheels, results = make_release(tmp_path)
     report_path = next(results.glob('cp312-linux*/test-result.json'))
     report = json.loads(report_path.read_text())
     if fault == 'missing-wheel':
         (wheels / report['wheel']).unlink()
+    elif fault == 'tampered-wheel':
+        (wheels / report['wheel']).write_bytes(b'tampered')
     elif fault == 'missing-test':
         report_path.unlink()
     else:

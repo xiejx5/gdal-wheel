@@ -39,8 +39,13 @@ def inspect(wheel):
             for path in files:
                 if path.suffix not in ('.so', '.dylib'):
                     continue
+                # LC_ID_DYLIB is an identity, not a dependency. Delocate uses a
+                # synthetic /DLC identity; only LC_LOAD_DYLIB entries load files.
+                identities = set(output('otool', '-D', str(path)).splitlines()[1:])
                 for line in output('otool', '-L', str(path)).splitlines()[1:]:
                     name = line.strip().split(' (')[0]
+                    if name in identities:
+                        continue
                     if not name.startswith(('@loader_path/', '@rpath/', '/usr/lib/', '/System/Library/')):
                         raise RuntimeError(f'Non-wheel macOS install name: {name}')
                 commands = output('otool', '-l', str(path))

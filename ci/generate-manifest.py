@@ -46,9 +46,11 @@ def generate(directory, results, release, repository):
         if report[0].get('hdf4') != expected_hdf4:
             raise ValueError('HDF4 feature contract mismatch')
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        if report[0].get('sha256') != digest:
+            raise ValueError(f'Tested wheel bytes do not match artifact: {path.name}')
         (directory / (path.name + '.sha256')).write_text(f'{digest}  {path.name}\n')
         rows.append(dict(filename=path.name, sha256=digest, python=python, platform=platform,
-                         tags=sorted(str(t) for t in tags), **{k:v for k,v in report[0].items() if k != 'wheel'}))
+                         tags=sorted(str(t) for t in tags), **{k:v for k,v in report[0].items() if k not in ('wheel', 'sha256')}))
     if seen != {(python, platform) for python in PYTHONS for platform in PLATFORMS}:
         raise ValueError(f'Incomplete release: {seen}')
     manifest = dict(schema_version=1, complete=True, version=release['version'], upstream=release,

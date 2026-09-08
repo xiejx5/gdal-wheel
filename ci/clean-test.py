@@ -1,5 +1,6 @@
 """Install precisely one ABI wheel, outside all build environments."""
 import json
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -36,7 +37,7 @@ subprocess.run([sys.executable, '-m', 'pytest', root / 'tests/test_binary_featur
 if sys.version_info[:2] == (3, 12):
     subprocess.run([sys.executable, '-m', 'pip', 'install', '--only-binary=:all:', 'rasterio', 'fiona'], check=True)
     subprocess.run([sys.executable, root / 'tests/coexistence.py'], check=True)
-record = {'wheel': wheel.name, 'feature_tests': 'passed', 'leak_tests': 'passed',
+record = {'wheel': wheel.name, 'sha256': hashlib.sha256(wheel.read_bytes()).hexdigest(), 'feature_tests': 'passed', 'leak_tests': 'passed',
           'coexistence_tests': 'passed' if sys.version_info[:2] == (3, 12) else 'not-required',
           'hdf4': 'not-supported' if sys.platform == 'win32' else 'passed'}
 (root / 'test-result.json').write_text(json.dumps(record, indent=2) + '\n')

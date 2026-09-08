@@ -19,4 +19,6 @@ New-Item -ItemType Directory -Force "$env:BUILD_PREFIX/share/licenses" | Out-Nul
 Get-ChildItem "$installed/share/*/copyright" | ForEach-Object {
     Copy-Item $_.FullName "$env:BUILD_PREFIX/share/licenses/$($_.Directory.Name).txt"
 }
+& "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" list --x-json "--x-install-root=$root/build/vcpkg_installed" | Set-Content -Encoding utf8 "$env:BUILD_PREFIX/vcpkg-packages.json"
+if ($LASTEXITCODE -ne 0) { throw "Could not record vcpkg package versions" }
 Run-Checked { python "$PSScriptRoot/build-native.py" }

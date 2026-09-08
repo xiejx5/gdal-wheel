@@ -84,8 +84,8 @@ jobs:
             gdal-libs
             build/downloads
             build/vcpkg-cache
-          key: native-${{ matrix.os }}-${{ hashFiles('ci/build-native*', 'ci/dependencies.json', 'ci/vcpkg.json', 'ci/triplets/*', 'ci/build-requirements.txt', '.github/workflows/gdal-wheels.yml') }}-${{ needs.source.outputs.version }}
-          restore-keys: native-${{ matrix.os }}-${{ hashFiles('ci/build-native*', 'ci/dependencies.json', 'ci/vcpkg.json', 'ci/triplets/*', 'ci/build-requirements.txt', '.github/workflows/gdal-wheels.yml') }}-
+          key: native-${{ matrix.os }}-${{ hashFiles('ci/build-native*', 'ci/provenance.py', 'ci/dependencies.json', 'ci/vcpkg.json', 'ci/triplets/*', 'ci/build-requirements.txt', '.github/workflows/gdal-wheels.yml') }}-${{ needs.source.outputs.version }}
+          restore-keys: native-${{ matrix.os }}-${{ hashFiles('ci/build-native*', 'ci/provenance.py', 'ci/dependencies.json', 'ci/vcpkg.json', 'ci/triplets/*', 'ci/build-requirements.txt', '.github/workflows/gdal-wheels.yml') }}-
       - name: Activate MSVC
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
