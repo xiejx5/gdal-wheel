@@ -8,11 +8,16 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
 WHEELHOUSE = ROOT / 'wheelhouse'
 RESULTS = ROOT / 'results'
+REQUIRED_FILES = {
+    'osgeo/data/gdal/gdalvrt.xsd',
+    'osgeo/data/proj/proj.db',
+}
 
 
 def run(*args: object) -> None:
@@ -34,6 +39,17 @@ def wheel_for(version: str) -> Path:
     if len(wheels) != 1:
         raise RuntimeError(f'Expected one {abi} wheel, found: {wheels}')
     return wheels[0]
+
+
+def inspect_wheel(wheel: Path) -> None:
+    with zipfile.ZipFile(wheel) as archive:
+        names = set(archive.namelist())
+
+    missing = sorted(REQUIRED_FILES - names)
+    if missing:
+        raise RuntimeError(f'Missing packaged data: {missing}')
+    if not any(name.startswith('osgeo/_gdal') for name in names):
+        raise RuntimeError('Missing osgeo._gdal extension')
 
 
 def clean_environment() -> None:
@@ -61,7 +77,7 @@ def test_one(wheel: Path, result_dir: Path) -> None:
     }
     try:
         clean_environment()
-        run(sys.executable, ROOT / 'ci/inspect-wheel.py', wheel)
+        inspect_wheel(wheel)
         run(
             sys.executable,
             '-m',

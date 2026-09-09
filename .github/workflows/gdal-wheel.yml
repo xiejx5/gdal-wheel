@@ -32,6 +32,8 @@ jobs:
       version: ${{ steps.resolve.outputs.version }}
       should_build: ${{ steps.python.outputs.ready }}
       python_versions: ${{ steps.python.outputs.python_versions }}
+      python_abis: ${{ steps.python.outputs.python_abis }}
+      build_python: ${{ steps.python.outputs.build_python }}
       cibw_build: ${{ steps.python.outputs.cibw_build }}
       cibuildwheel_version: ${{ steps.python.outputs.cibuildwheel_version }}
       github_state: ${{ steps.decide.outputs.github_state }}
@@ -140,6 +142,7 @@ jobs:
     timeout-minutes: 180
     env:
       BUILD_PREFIX: ${{ github.workspace }}/gdal-libs
+      BUILD_PYTHON: ${{ needs.source.outputs.build_python }}
       CIBW_ARCHS: ${{ matrix.arch }}
       CIBW_BUILD: ${{ needs.source.outputs.cibw_build }}
       VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/build/vcpkg-cache,readwrite
@@ -202,14 +205,14 @@ jobs:
         shell: bash
         run: |
           docker run --rm -v "$PWD:/project" -w /project \
-            -e BUILD_PREFIX=/project/gdal-libs \
+            -e BUILD_PREFIX=/project/gdal-libs -e BUILD_PYTHON \
             "$CIBW_MANYLINUX_X86_64_IMAGE" \
             bash -euc '
+              python=/opt/python/${BUILD_PYTHON}-${BUILD_PYTHON}/bin/python
               dnf -y --setopt=install_weak_deps=False install perl-core
-              export PATH=/opt/python/cp312-cp312/bin:$PATH
-              python -m pip install --no-cache-dir -U cmake ninja
-              python ci/build-native.py
-              python ci/prepare-bindings.py
+              "$python" -m pip install --no-cache-dir -U cmake ninja
+              "$python" ci/build-native.py
+              "$python" ci/prepare-bindings.py
             '
 
       - name: Prepare Linux bindings from cached SDK
@@ -217,11 +220,11 @@ jobs:
         shell: bash
         run: |
           docker run --rm -v "$PWD:/project" -w /project \
-            -e BUILD_PREFIX=/project/gdal-libs \
+            -e BUILD_PREFIX=/project/gdal-libs -e BUILD_PYTHON \
             "$CIBW_MANYLINUX_X86_64_IMAGE" \
             bash -euc '
-              export PATH=/opt/python/cp312-cp312/bin:$PATH
-              python ci/prepare-bindings.py
+              python=/opt/python/${BUILD_PYTHON}-${BUILD_PYTHON}/bin/python
+              "$python" ci/prepare-bindings.py
             '
 
       - name: Save complete native SDK cache
@@ -235,10 +238,19 @@ jobs:
             build/vcpkg-cache
           key: native-v4-${{ matrix.platform }}-${{ hashFiles('ci/dependencies.json', 'ci/vcpkg.json', 'ci/triplets/*', 'ci/build-native.py', 'ci/build-native-windows.ps1') }}-${{ needs.source.outputs.version }}
 
+      - name: Restore built wheel cache
+        id: wheel-cache
+        uses: actions/cache@v6
+        with:
+          path: wheelhouse
+          key: wheels-v1-${{ matrix.platform }}-${{ needs.source.outputs.version }}-${{ needs.source.outputs.python_abis }}-${{ needs.source.outputs.cibuildwheel_version }}-${{ hashFiles('ci/**') }}
+
       - name: Install cibuildwheel
+        if: steps.wheel-cache.outputs.cache-hit != 'true'
         run: python -m pip install -q "cibuildwheel==${{ needs.source.outputs.cibuildwheel_version }}"
 
       - name: Build and repair Python wheels
+        if: steps.wheel-cache.outputs.cache-hit != 'true'
         env:
           CIBW_ENVIRONMENT_LINUX: BUILD_PREFIX=/project/gdal-libs PATH=/project/gdal-libs/bin:$PATH LD_LIBRARY_PATH=/project/gdal-libs/lib
           CIBW_ENVIRONMENT_MACOS: BUILD_PREFIX="${{ github.workspace }}/gdal-libs" PATH="${{ github.workspace }}/gdal-libs/bin:$PATH" MACOSX_DEPLOYMENT_TARGET=11.0
@@ -348,8 +360,8 @@ jobs:
 
       - name: Gate complete release
         env:
-          REPOSITORY: ${{ github.repository }}
-        run: python ci/generate-manifest.py --repository "$REPOSITORY"
+          PYTHON_VERSIONS: ${{ needs.source.outputs.python_versions }}
+        run: python ci/generate-manifest.py
 
       - uses: actions/upload-artifact@v7
         with:

@@ -1,12 +1,9 @@
 /build/
 /gdal-libs/
 /wheelhouse/
+/results/
 /.venv/
 __pycache__/
 .pytest_cache/
 *.egg-info/
-/.test-venv/
-/test-result.json
-/feature-tests.xml
 .DS_Store
-.ruff_cache

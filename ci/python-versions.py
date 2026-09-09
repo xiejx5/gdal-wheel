@@ -30,7 +30,6 @@ def python_version(tag):
 
 def conda_pythons(gdal_version):
     url = f'https://api.anaconda.org/release/conda-forge/gdal/{gdal_version}'
-
     try:
         with urlopen(url, timeout=30) as response:
             distributions = json.load(response)['distributions']
@@ -47,7 +46,6 @@ def conda_pythons(gdal_version):
 
         attrs = dist['attrs']
         platform = attrs.get('subdir')
-
         if platform not in found:
             continue
 
@@ -79,7 +77,6 @@ cibw = {
     for line in identifiers.splitlines()
     if (match := re.match(r'^(cp\d+t?)-', line))
 }
-
 # actions/setup-python "3.x" gives this job the latest stable CPython.
 # This prevents a release-candidate ABI from entering the matrix early.
 stable = sys.version_info[:2]
@@ -94,13 +91,11 @@ normal = sorted(
     (tag for tag in supported if not tag.endswith('t')),
     key=tag_key,
 )[-3:]
-
 if len(normal) < 3:
     print('conda-forge is not ready:', ', '.join(sorted(supported, key=tag_key)))
     output('ready', 'false')
     raise SystemExit
 
-# Include every proven free-threaded counterpart of the selected three.
 threaded = [f'{tag}t' for tag in normal if f'{tag}t' in supported]
 selected = normal + threaded
 
@@ -109,6 +104,8 @@ output(
     'python_versions',
     json.dumps([python_version(tag) for tag in selected], separators=(',', ':')),
 )
+output('python_abis', '-'.join(selected))
+output('build_python', normal[-1])
 output('cibw_build', ' '.join(f'{tag}-*' for tag in selected))
 output('cibuildwheel_version', version('cibuildwheel'))
 
