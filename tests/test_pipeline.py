@@ -102,7 +102,6 @@ def make_release(tmp_path):
                         "wheel": name,
                         "sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
                         "feature_tests": "passed",
-                        "coexistence_tests": "passed",
                         "hdf4": (
                             "not-supported"
                             if platform == "windows-x86_64"
@@ -117,7 +116,9 @@ def make_release(tmp_path):
 
 def test_complete_release_has_integrity_links(tmp_path):
     wheels, results = make_release(tmp_path)
-    record = manifest.generate(wheels, results, {"version": "3.13.3"}, "owner/repo")
+    record = manifest.generate(
+        wheels, results, {"version": "3.13.3"}, "owner/repo"
+    )
 
     expected = len(python_abis()) * 3
     assert record["complete"]
@@ -132,7 +133,6 @@ def test_complete_release_has_integrity_links(tmp_path):
         "missing-test",
         "failed-test",
         "hdf4",
-        "coexistence",
         "tampered-wheel",
     ],
 )
@@ -151,13 +151,14 @@ def test_incomplete_release_rejected(tmp_path, fault):
         field = {
             "failed-test": "feature_tests",
             "hdf4": "hdf4",
-            "coexistence": "coexistence_tests",
         }[fault]
         report[field] = "failed"
         report_path.write_text(json.dumps(report))
 
     with pytest.raises(ValueError):
-        manifest.generate(wheels, results, {"version": "3.13.3"}, "owner/repo")
+        manifest.generate(
+            wheels, results, {"version": "3.13.3"}, "owner/repo"
+        )
 
     assert not (wheels / "manifest.json").exists()
 

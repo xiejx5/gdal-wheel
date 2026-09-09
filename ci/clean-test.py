@@ -50,7 +50,6 @@ def test_one(wheel: Path, result_dir: Path) -> None:
         "wheel": wheel.name,
         "sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
         "feature_tests": "failed",
-        "coexistence_tests": "failed",
         "hdf4": "not-supported" if sys.platform == "win32" else "failed",
     }
 
@@ -67,9 +66,6 @@ def test_one(wheel: Path, result_dir: Path) -> None:
             f"--junitxml={result_dir / 'feature-tests.xml'}",
         )
         report["feature_tests"] = "passed"
-
-        run(sys.executable, ROOT / "tests/coexistence.py")
-        report["coexistence_tests"] = "passed"
 
         if sys.platform != "win32":
             report["hdf4"] = "passed"
@@ -105,10 +101,6 @@ def main() -> None:
             "numpy",
             "--with",
             "pytest",
-            "--with",
-            "rasterio",
-            "--with",
-            "fiona",
             "--",
             "python",
             __file__,

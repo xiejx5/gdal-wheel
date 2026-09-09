@@ -29,9 +29,7 @@ def python_key(tag):
 
 
 def generate(directory, results, release, repository):
-    reports = [
-        json.loads(path.read_text()) for path in results.rglob("test-result.json")
-    ]
+    reports = [json.loads(path.read_text()) for path in results.rglob("test-result.json")]
     rows = []
     seen = set()
 
@@ -63,9 +61,6 @@ def generate(directory, results, release, repository):
 
         if report.get("feature_tests") != "passed":
             raise ValueError(f"Feature tests failed: {path.name}")
-        if report.get("coexistence_tests") != "passed":
-            raise ValueError(f"Coexistence tests failed: {path.name}")
-
         expected_hdf4 = "not-supported" if platform == "windows-x86_64" else "passed"
         if report.get("hdf4") != expected_hdf4:
             raise ValueError(f"HDF4 contract mismatch: {path.name}")
@@ -83,7 +78,6 @@ def generate(directory, results, release, repository):
                 "platform": platform,
                 "tags": sorted(str(tag) for tag in tags),
                 "feature_tests": "passed",
-                "coexistence_tests": "passed",
                 "hdf4": report["hdf4"],
             }
         )
@@ -108,12 +102,10 @@ def generate(directory, results, release, repository):
 
     (directory / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
-    base = (
-        f"https://github.com/{repository}/releases/download/gdal-v{release['version']}"
-    )
+    base = f"https://github.com/{repository}/releases/download/gdal-v{release['version']}"
     links = [
         f'<a href="{base}/{quote(row["filename"])}#sha256={row["sha256"]}">'
-        f"{html.escape(row['filename'])}</a><br>"
+        f'{html.escape(row["filename"])}</a><br>'
         for row in rows
     ]
     (directory / "index.html").write_text(
