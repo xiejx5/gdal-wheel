@@ -4,6 +4,8 @@ Unofficial, self-contained [GDAL](https://github.com/OSGeo/gdal) binary wheels w
 
 Wheels are built for Linux, macOS, and Windows and published as GitHub Release assets instead of PyPI.
 
+**Package index:** [gdal.xiejx5.workers.dev](https://gdal.xiejx5.workers.dev)
+
 ## Install with uv
 
 Add the following to your `pyproject.toml`:
