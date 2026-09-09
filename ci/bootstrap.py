@@ -14,7 +14,9 @@ def _setup_bundled_data():
         and _gdal.GetConfigOption('GDAL_DATA') is None
         and gdal_data.is_dir()
     ):
-        _gdal.SetConfigOption('GDAL_DATA', str(gdal_data))
+        path = str(gdal_data)
+        _gdal.SetConfigOption('GDAL_DATA', path)
+        _gdal.PushFinderLocation(path)
     # Explicit application/environment PROJ paths always win, including legacy PROJ_LIB.
     # Do not import osr here: that can reset application state or create import cycles.
     if proj_data.is_dir() and not any(
