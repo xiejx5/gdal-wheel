@@ -117,9 +117,7 @@ def make_release(tmp_path):
 
 def test_complete_release_has_integrity_links(tmp_path):
     wheels, results = make_release(tmp_path)
-    record = manifest.generate(
-        wheels, results, {"version": "3.13.3"}, "owner/repo"
-    )
+    record = manifest.generate(wheels, results, {"version": "3.13.3"}, "owner/repo")
 
     expected = len(python_abis()) * 3
     assert record["complete"]
@@ -159,9 +157,7 @@ def test_incomplete_release_rejected(tmp_path, fault):
         report_path.write_text(json.dumps(report))
 
     with pytest.raises(ValueError):
-        manifest.generate(
-            wheels, results, {"version": "3.13.3"}, "owner/repo"
-        )
+        manifest.generate(wheels, results, {"version": "3.13.3"}, "owner/repo")
 
     assert not (wheels / "manifest.json").exists()
 

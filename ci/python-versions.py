@@ -45,6 +45,7 @@ identifiers = subprocess.check_output(
         sys.executable,
         "-m",
         "cibuildwheel",
+        "build/bindings.tar.gz",
         "--platform",
         "linux",
         "--archs",
