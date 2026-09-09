@@ -39,9 +39,8 @@ def generate(directory, results, release, repository):
     for path in sorted(directory.glob('*.whl')):
         name, version, build, tags = parse_wheel_filename(path.name)
 
-        if name != 'gdal' or str(version) != release['version'] or build:
+        if name != 'gdal-wheel' or str(version) != release['version'] or build:
             raise ValueError(f'Unexpected wheel: {path.name}')
-
         interpreters = {tag.interpreter for tag in tags}
         abis = {tag.abi for tag in tags}
 
@@ -50,7 +49,6 @@ def generate(directory, results, release, repository):
 
         interpreter = interpreters.pop()
         python = abis.pop()
-
         if python.endswith('t'):
             valid = (
                 python.startswith('cp')
@@ -66,7 +64,6 @@ def generate(directory, results, release, repository):
 
         if not valid:
             raise ValueError(f'Unsupported Python ABI: {path.name}')
-
         platform = platform_name(tags)
         key = (python, platform)
 
@@ -81,7 +78,6 @@ def generate(directory, results, release, repository):
             raise ValueError(f'Missing clean-test result: {path.name}')
 
         report = matching[0]
-
         if report.get('feature_tests') != 'passed':
             raise ValueError(f'Feature tests failed: {path.name}')
 
@@ -94,7 +90,6 @@ def generate(directory, results, release, repository):
 
         if report.get('sha256') != digest:
             raise ValueError(f'Tested wheel bytes changed: {path.name}')
-
         rows.append(
             {
                 'filename': path.name,
@@ -106,7 +101,6 @@ def generate(directory, results, release, repository):
                 'hdf4': report['hdf4'],
             }
         )
-
     pythons = sorted({python for python, _ in seen}, key=python_key)
     normal = [python for python in pythons if not python.endswith('t')]
     threaded = [python for python in pythons if python.endswith('t')]
@@ -115,7 +109,6 @@ def generate(directory, results, release, repository):
         raise ValueError(
             f'Expected three normal CPythons and only their free-threaded variants, got {pythons}'
         )
-
     expected = {(python, platform) for python in pythons for platform in PLATFORMS}
 
     if seen != expected:
@@ -130,19 +123,15 @@ def generate(directory, results, release, repository):
         'platforms': {platform: 'passed' for platform in sorted(PLATFORMS)},
         'wheels': rows,
     }
-
     (directory / 'manifest.json').write_text(json.dumps(record, indent=2) + '\n')
 
-    base = (
-        f'https://github.com/{repository}/releases/download/gdal-v{release["version"]}'
-    )
+    base = f'https://github.com/{repository}/releases/download/gdal-wheel-v{release["version"]}'
 
     links = [
         f'<a href="{base}/{quote(row["filename"])}#sha256={row["sha256"]}">'
         f'{html.escape(row["filename"])}</a><br>'
         for row in rows
     ]
-
     (directory / 'index.html').write_text(
         '<!doctype html>\n<html><head><meta charset="utf-8">'
         '<title>GDAL wheels</title></head><body>\n'
@@ -160,7 +149,6 @@ if __name__ == '__main__':
     parser.add_argument('--release', type=Path, default=Path('build/release.json'))
     parser.add_argument('--repository', required=True)
     args = parser.parse_args()
-
     generate(
         args.wheels,
         args.results,

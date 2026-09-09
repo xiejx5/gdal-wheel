@@ -30,7 +30,7 @@ def wheel_tags(version: str) -> tuple[str, str]:
 
 def wheel_for(version: str) -> Path:
     interpreter, abi = wheel_tags(version)
-    wheels = list(WHEELHOUSE.glob(f'gdal-*-{interpreter}-{abi}-*.whl'))
+    wheels = list(WHEELHOUSE.glob(f'gdal_wheel-*-{interpreter}-{abi}-*.whl'))
     if len(wheels) != 1:
         raise RuntimeError(f'Expected one {abi} wheel, found: {wheels}')
     return wheels[0]
@@ -53,14 +53,12 @@ def clean_environment() -> None:
 
 def test_one(wheel: Path, result_dir: Path) -> None:
     result_dir.mkdir(parents=True, exist_ok=True)
-
     report = {
         'wheel': wheel.name,
         'sha256': hashlib.sha256(wheel.read_bytes()).hexdigest(),
         'feature_tests': 'failed',
         'hdf4': 'not-supported' if sys.platform == 'win32' else 'failed',
     }
-
     try:
         clean_environment()
         run(sys.executable, ROOT / 'ci/inspect-wheel.py', wheel)
@@ -73,7 +71,6 @@ def test_one(wheel: Path, result_dir: Path) -> None:
             f'--junitxml={result_dir / "feature-tests.xml"}',
         )
         report['feature_tests'] = 'passed'
-
         if sys.platform != 'win32':
             report['hdf4'] = 'passed'
     finally:
@@ -90,7 +87,6 @@ def main() -> None:
     for version in json.loads(os.environ['PYTHON_VERSIONS']):
         wheel = wheel_for(version)
         _, abi = wheel_tags(version)
-
         run('uv', 'python', 'install', version)
         run(
             'uv',

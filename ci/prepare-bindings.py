@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 
 from sources import ROOT, download, extract
@@ -15,17 +16,35 @@ def patch_setup(package: Path) -> None:
     setup = package / 'setup.py'
     text = setup.read_text()
 
+    text, count = re.subn(
+        r"(?m)^name\s*=\s*(['\"])GDAL\1\s*$",
+        "name = 'gdal-wheel'",
+        text,
+        count=1,
+    )
+    if count != 1:
+        raise RuntimeError('Upstream setup.py changed; review package name patch')
+
+    project = package / 'pyproject.toml'
+    if project.is_file():
+        project_text = project.read_text()
+        project_text, _ = re.subn(
+            r"(?m)^name\s*=\s*(['\"])GDAL\1\s*$",
+            'name = "gdal-wheel"',
+            project_text,
+            count=1,
+        )
+        project.write_text(project_text)
+
     needle = 'exclude_package_data = exclude_package_data,'
     if text.count(needle) != 1:
         raise RuntimeError('Upstream setup.py changed; review data packaging patch')
-
     package_data = (
         "    package_data={'osgeo': [str(p.relative_to('osgeo')) "
         "for p in __import__('pathlib').Path('osgeo/data').rglob('*') "
         'if p.is_file()]},'
     )
     text = text.replace(needle, f'{needle}\n{package_data}')
-
     text = text.replace(
         'extra_compile_args=extra_compile_args',
         'extra_compile_args=list(extra_compile_args)',
@@ -38,7 +57,6 @@ def patch_setup(package: Path) -> None:
     marker = '\nsetup('
     if marker not in text:
         raise RuntimeError('Upstream setup.py changed; review free-threaded patch')
-
     free_threaded = """
 if (__import__('os').name == 'nt' and
         __import__('sysconfig').get_config_var('Py_GIL_DISABLED')):
@@ -53,7 +71,6 @@ if (__import__('os').name == 'nt' and
 
 def main() -> None:
     release = json.loads((ROOT / 'build/release.json').read_text())
-
     source = extract(
         download(release['bindings'], ROOT / 'build/bindings.tar.gz'),
         ROOT / 'build/bindings-source',
@@ -68,7 +85,6 @@ def main() -> None:
 
     prefix = Path(os.environ['BUILD_PREFIX']).resolve()
     osgeo = package / 'osgeo'
-
     for name, required in (('gdal', 'gdalvrt.xsd'), ('proj', 'proj.db')):
         origin = prefix / 'share' / name
         required_path = origin / required
@@ -82,7 +98,6 @@ def main() -> None:
 
     if licenses.exists():
         shutil.copytree(licenses, osgeo / 'data/licenses')
-
     for name in (
         'release.json',
         'dependencies.json',
@@ -97,7 +112,6 @@ def main() -> None:
 
     with (package / 'MANIFEST.in').open('a') as stream:
         stream.write('\nrecursive-include osgeo/data *\n')
-
     patch_setup(package)
 
     with (package / 'setup.cfg').open('a') as stream:

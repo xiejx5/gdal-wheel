@@ -1,58 +1,36 @@
-# GDAL binary wheels
+# GDAL binary wheel
 
 Unofficial, self-contained [GDAL](https://github.com/OSGeo/gdal) binary wheels with NumPy bindings.
 
-Wheels are built for Linux, macOS, and Windows and published as GitHub Release assets instead of PyPI.
+Wheels are built for Linux, macOS, and Windows, tested on clean runners, and published to PyPI and GitHub Releases.
 
-**Package index:** [gdal.xiejx5.workers.dev](https://gdal.xiejx5.workers.dev)
-
-## Install with uv
-
-Add the following to your `pyproject.toml`:
-
-```toml
-[tool.uv]
-no-build-package = ["gdal"]
-
-[tool.uv.sources]
-gdal = { index = "gdal-wheels" }
-
-[[tool.uv.index]]
-name = "gdal-wheels"
-url = "https://gdal.xiejx5.workers.dev"
-format = "flat"
-explicit = true
-```
-
-If these tables already exist, merge the entries instead of creating duplicates.
-
-Then install GDAL:
+## Install
 
 ```bash
-uv add gdal
+uv add gdal-wheel
 ```
 
-Verify the installation:
+The distribution name is `gdal-wheel`; the Python import remains the standard GDAL import:
 
-```bash
-uv run python -c 'from osgeo import gdal; print(gdal.VersionInfo("--version"))'
+```python
+from osgeo import gdal
+print(gdal.VersionInfo("--version"))
 ```
 
-`no-build-package` prevents `uv` from falling back to building GDAL from source.
-
-The explicit flat index is used only for `gdal`; other dependencies continue to use your normal package indexes.
-
-See the [uv index documentation](https://docs.astral.sh/uv/concepts/indexes/) for details.
+Do not install the separate `GDAL` distribution in the same environment because both provide `osgeo`.
 
 ## Releases
 
-GitHub Actions checks daily for new stable GDAL releases.
+GitHub Actions checks every three months for the newest stable GDAL release.
 
 A release is published only after the complete wheel set passes clean-runner tests on:
 
 - Linux x86_64
 - macOS ARM64
 - Windows x86_64
-- the latest four proven-compatible CPython versions
+- the latest three proven-compatible CPython versions
+- all proven free-threaded counterparts of those selected Python versions
 
-Browse the published [GitHub Releases](https://github.com/xiejx5/gdal-wheels/releases).
+The version of `gdal-wheel` follows the upstream GDAL version.
+
+Browse the [GitHub Releases](https://github.com/xiejx5/gdal-wheel/releases).
