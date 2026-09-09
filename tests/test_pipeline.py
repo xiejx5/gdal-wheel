@@ -28,7 +28,7 @@ PLATFORMS = (
     ('macos-arm64', 'macosx_11_0_arm64'),
     ('windows-x86_64', 'win_amd64'),
 )
-GDAL_VERSION = '9.9.9'
+TEST_VERSION = '9.9.9'
 
 
 def python_versions():
@@ -53,7 +53,7 @@ def make_release(tmp_path):
     for version in python_versions():
         interpreter, abi = wheel_tags(version)
         for platform, tag in PLATFORMS:
-            name = f'gdal_wheel-{GDAL_VERSION}-{interpreter}-{abi}-{tag}.whl'
+            name = f'gdal_wheel-{TEST_VERSION}-{interpreter}-{abi}-{tag}.whl'
             wheel = wheels / name
             wheel.write_bytes(name.encode())
 
@@ -111,7 +111,7 @@ def test_complete_release_passes(tmp_path):
     record = manifest.generate(
         wheels,
         results,
-        {'version': GDAL_VERSION},
+        {'version': TEST_VERSION},
         python_versions(),
     )
 
@@ -128,7 +128,7 @@ def test_tampered_wheel_is_rejected(tmp_path):
         manifest.generate(
             wheels,
             results,
-            {'version': GDAL_VERSION},
+            {'version': TEST_VERSION},
             python_versions(),
         )
 
