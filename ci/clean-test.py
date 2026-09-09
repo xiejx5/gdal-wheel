@@ -1,4 +1,4 @@
-"""Install and test one repaired GDAL wheel on a fresh runner."""
+"""Test every wheel for this platform in an isolated uv environment."""
 
 from __future__ import annotations
 
@@ -12,8 +12,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 WHEELHOUSE = ROOT / "wheelhouse"
-RESULT = ROOT / "test-result.json"
-JUNIT = ROOT / "feature-tests.xml"
+RESULTS = ROOT / "results"
 
 
 def run(*args: object) -> None:
@@ -21,32 +20,11 @@ def run(*args: object) -> None:
     subprocess.run([str(arg) for arg in args], check=True)
 
 
-def install(*packages: object, no_deps: bool = False) -> None:
-    command: list[object] = [
-        sys.executable,
-        "-m",
-        "pip",
-        "install",
-        "--only-binary=:all:",
-    ]
-    if no_deps:
-        command.append("--no-deps")
-    command.extend(packages)
-    run(*command)
-
-
-def compatible_wheel() -> Path:
-    from packaging.tags import sys_tags
-    from packaging.utils import parse_wheel_filename
-
-    supported = set(sys_tags())
-    wheels = [
-        wheel
-        for wheel in WHEELHOUSE.glob("*.whl")
-        if parse_wheel_filename(wheel.name)[3] & supported
-    ]
+def wheel_for(version: str) -> Path:
+    tag = "cp" + version.replace(".", "")
+    wheels = list(WHEELHOUSE.glob(f"gdal-*-{tag}-{tag}-*.whl"))
     if len(wheels) != 1:
-        raise RuntimeError(f"Expected one compatible wheel, found: {wheels}")
+        raise RuntimeError(f"Expected one {tag} wheel, found: {wheels}")
     return wheels[0]
 
 
@@ -62,28 +40,22 @@ def clean_environment() -> None:
         "BUILD_PREFIX",
     ):
         os.environ.pop(name, None)
-
     os.environ["PROJ_NETWORK"] = "OFF"
 
 
-def main() -> None:
+def test_one(wheel: Path, result_dir: Path) -> None:
+    result_dir.mkdir(parents=True, exist_ok=True)
+
     report = {
-        "wheel": None,
-        "sha256": None,
+        "wheel": wheel.name,
+        "sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
         "feature_tests": "failed",
         "coexistence_tests": "failed",
         "hdf4": "not-supported" if sys.platform == "win32" else "failed",
     }
 
     try:
-        install("packaging", "pytest", "numpy")
-        wheel = compatible_wheel()
-
-        report["wheel"] = wheel.name
-        report["sha256"] = hashlib.sha256(wheel.read_bytes()).hexdigest()
-
         clean_environment()
-        install(wheel, no_deps=True)
 
         run(sys.executable, ROOT / "ci/inspect-wheel.py", wheel)
         run(
@@ -92,19 +64,58 @@ def main() -> None:
             "pytest",
             ROOT / "tests/test_binary_features.py",
             "-q",
-            f"--junitxml={JUNIT}",
+            f"--junitxml={result_dir / 'feature-tests.xml'}",
         )
-
         report["feature_tests"] = "passed"
-        if sys.platform != "win32":
-            report["hdf4"] = "passed"
 
-        install("rasterio", "fiona")
         run(sys.executable, ROOT / "tests/coexistence.py")
         report["coexistence_tests"] = "passed"
 
+        if sys.platform != "win32":
+            report["hdf4"] = "passed"
+
     finally:
-        RESULT.write_text(json.dumps(report, indent=2) + "\n")
+        (result_dir / "test-result.json").write_text(
+            json.dumps(report, indent=2) + "\n"
+        )
+
+
+def main() -> None:
+    if "--ready" in sys.argv:
+        test_one(Path(sys.argv[2]), Path(sys.argv[3]))
+        return
+
+    versions = json.loads(os.environ["PYTHON_VERSIONS"])
+
+    for version in versions:
+        wheel = wheel_for(version)
+        tag = "cp" + version.replace(".", "")
+
+        run("uv", "python", "install", version)
+        run(
+            "uv",
+            "run",
+            "--isolated",
+            "--no-project",
+            "--python",
+            version,
+            "--with",
+            str(wheel),
+            "--with",
+            "numpy",
+            "--with",
+            "pytest",
+            "--with",
+            "rasterio",
+            "--with",
+            "fiona",
+            "--",
+            "python",
+            __file__,
+            "--ready",
+            wheel,
+            RESULTS / tag,
+        )
 
 
 if __name__ == "__main__":

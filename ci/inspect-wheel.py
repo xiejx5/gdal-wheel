@@ -1,4 +1,4 @@
-"""Minimal static checks for files that must be bundled in the wheel."""
+"""Check only files that must be bundled in the wheel."""
 
 from pathlib import Path
 import sys
@@ -12,10 +12,8 @@ REQUIRED = {
 
 
 def main() -> None:
-    if len(sys.argv) != 2:
-        raise SystemExit("usage: inspect-wheel.py WHEEL")
-
     wheel = Path(sys.argv[1])
+
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())
 
@@ -24,7 +22,7 @@ def main() -> None:
         raise RuntimeError(f"Missing packaged data: {missing}")
 
     if not any(name.startswith("osgeo/_gdal") for name in names):
-        raise RuntimeError("Missing osgeo._gdal extension module")
+        raise RuntimeError("Missing osgeo._gdal extension")
 
     print(f"Wheel content OK: {wheel.name}")
 

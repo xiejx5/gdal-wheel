@@ -1,10 +1,12 @@
 # GDAL binary wheels
 
-Unofficial, self-contained [GDAL](https://github.com/OSGeo/gdal) wheels with NumPy bindings. They are published as GitHub Release assets, not to PyPI.
+Unofficial, self-contained [GDAL](https://github.com/OSGeo/gdal) binary wheels with NumPy bindings.
+
+Wheels are built for Linux, macOS, and Windows and published as GitHub Release assets instead of PyPI.
 
 ## Install with uv
 
-In the application that uses GDAL, add these `uv` settings in `pyproject.toml`:
+Add the following to your `pyproject.toml`:
 
 ```toml
 [tool.uv]
@@ -20,18 +22,35 @@ format = "flat"
 explicit = true
 ```
 
-If those tables already exist, merge the entries instead of creating duplicate tables. Then add and install GDAL:
+If these tables already exist, merge the entries instead of creating duplicates.
+
+Then install GDAL:
 
 ```bash
 uv add gdal
-uv sync
+```
+
+Verify the installation:
+
+```bash
 uv run python -c 'from osgeo import gdal; print(gdal.VersionInfo("--version"))'
 ```
 
-`no-build-package` prevents uv from falling back to compiling GDAL from source. The explicit flat index is used only for `gdal`; other dependencies continue to use the normal index configuration. See uv's [index configuration](https://docs.astral.sh/uv/concepts/indexes/).
+`no-build-package` prevents `uv` from falling back to building GDAL from source.
+
+The explicit flat index is used only for `gdal`; other dependencies continue to use your normal package indexes.
+
+See the [uv index documentation](https://docs.astral.sh/uv/concepts/indexes/) for details.
 
 ## Releases
 
-GitHub Actions checks daily for a new stable GDAL release. A new version is built, tested on all three platforms and four Python versions, and published only when the complete test matrix passes.
+GitHub Actions checks daily for new stable GDAL releases.
+
+A release is published only after the complete wheel set passes clean-runner tests on:
+
+- Linux x86_64
+- macOS ARM64
+- Windows x86_64
+- the latest four proven-compatible CPython versions
 
 Browse the published [GitHub Releases](https://github.com/xiejx5/gdal-wheels/releases).

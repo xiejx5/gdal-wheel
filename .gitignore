@@ -9,3 +9,4 @@ __pycache__/
 /test-result.json
 /feature-tests.xml
 .DS_Store
+.ruff_cache
