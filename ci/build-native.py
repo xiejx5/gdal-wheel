@@ -14,8 +14,6 @@ from sources import ROOT, download, extract
 PREFIX = Path(os.environ["BUILD_PREFIX"]).resolve()
 WORK = ROOT / "build" / "native"
 LOCK = json.loads((ROOT / "ci/dependencies.json").read_text())
-NATIVE_TOOLS = (ROOT / "ci/native-requirements.txt").read_text()
-CACHE_SCHEMA = (ROOT / "ci/native-cache-version.txt").read_text().strip()
 WINDOWS = os.name == "nt"
 MACOS = platform.system() == "Darwin"
 JOBS = str(os.cpu_count() or 2)
@@ -118,11 +116,9 @@ def save_licenses(name: str, source: Path) -> None:
 def dependency_key(name: str, record: dict) -> str:
     return digest(
         {
-            "schema": CACHE_SCHEMA,
             "platform": platform_name(),
             "name": name,
             "record": record,
-            "native_tools": NATIVE_TOOLS,
         }
     )
 
@@ -151,7 +147,6 @@ def build_dependency(name: str, record: dict) -> None:
         run("make", f"-j{JOBS}", "install", cwd=source)
     elif name == "openssl":
         target = "darwin64-arm64-cc" if MACOS else "linux-x86_64"
-
         run(
             "perl",
             source / "Configure",
@@ -162,12 +157,7 @@ def build_dependency(name: str, record: dict) -> None:
             "--libdir=lib",
             cwd=source,
         )
-
-        # Compile first.
-        run("make", f"-j{JOBS}", "build_sw", cwd=source)
-
-        # Install only after the build is complete.
-        run("make", "-j1", "install_sw", cwd=source)
+        run("make", f"-j{JOBS}", "install_sw", cwd=source)
     else:
         cmake(source / record["subdir"], name, record["cmake"])
 
@@ -270,11 +260,9 @@ def verify_options(options: list[str]) -> None:
 def build_gdal(release: dict, options: list[str]) -> str:
     fingerprint = digest(
         {
-            "schema": CACHE_SCHEMA,
             "platform": platform_name(),
             "release": release,
             "lock": LOCK,
-            "native_tools": NATIVE_TOOLS,
             "options": options,
         }
     )
@@ -311,11 +299,9 @@ def main() -> None:
     options = gdal_options()
     gdal_fingerprint = digest(
         {
-            "schema": CACHE_SCHEMA,
             "platform": platform_name(),
             "release": release,
             "lock": LOCK,
-            "native_tools": NATIVE_TOOLS,
             "options": options,
         }
     )
