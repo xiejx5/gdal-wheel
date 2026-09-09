@@ -20,11 +20,19 @@ def run(*args: object) -> None:
     subprocess.run([str(arg) for arg in args], check=True)
 
 
+def wheel_tags(version: str) -> tuple[str, str]:
+    threaded = version.endswith("t")
+    digits = version.removesuffix("t").replace(".", "")
+    interpreter = f"cp{digits}"
+    abi = interpreter + ("t" if threaded else "")
+    return interpreter, abi
+
+
 def wheel_for(version: str) -> Path:
-    tag = "cp" + version.replace(".", "")
-    wheels = list(WHEELHOUSE.glob(f"gdal-*-{tag}-{tag}-*.whl"))
+    interpreter, abi = wheel_tags(version)
+    wheels = list(WHEELHOUSE.glob(f"gdal-*-{interpreter}-{abi}-*.whl"))
     if len(wheels) != 1:
-        raise RuntimeError(f"Expected one {tag} wheel, found: {wheels}")
+        raise RuntimeError(f"Expected one {abi} wheel, found: {wheels}")
     return wheels[0]
 
 
@@ -55,7 +63,6 @@ def test_one(wheel: Path, result_dir: Path) -> None:
 
     try:
         clean_environment()
-
         run(sys.executable, ROOT / "ci/inspect-wheel.py", wheel)
         run(
             sys.executable,
@@ -69,7 +76,6 @@ def test_one(wheel: Path, result_dir: Path) -> None:
 
         if sys.platform != "win32":
             report["hdf4"] = "passed"
-
     finally:
         (result_dir / "test-result.json").write_text(
             json.dumps(report, indent=2) + "\n"
@@ -81,11 +87,9 @@ def main() -> None:
         test_one(Path(sys.argv[2]), Path(sys.argv[3]))
         return
 
-    versions = json.loads(os.environ["PYTHON_VERSIONS"])
-
-    for version in versions:
+    for version in json.loads(os.environ["PYTHON_VERSIONS"]):
         wheel = wheel_for(version)
-        tag = "cp" + version.replace(".", "")
+        _, abi = wheel_tags(version)
 
         run("uv", "python", "install", version)
         run(
@@ -106,7 +110,7 @@ def main() -> None:
             __file__,
             "--ready",
             wheel,
-            RESULTS / tag,
+            RESULTS / abi,
         )
 
 

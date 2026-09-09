@@ -15,21 +15,17 @@ def patch_setup(package: Path) -> None:
     setup = package / "setup.py"
     text = setup.read_text()
 
-    # Upstream disables include_package_data, so explicitly include the native
-    # data, provenance, SBOM, and license files bundled under osgeo/data.
     needle = "exclude_package_data = exclude_package_data,"
     if text.count(needle) != 1:
         raise RuntimeError("Upstream setup.py changed; review data packaging patch")
+
     package_data = (
         "    package_data={'osgeo': [str(p.relative_to('osgeo')) "
-        "for p in __import__('pathlib').Path('osgeo/data').rglob('*') if p.is_file()]},"
+        "for p in __import__('pathlib').Path('osgeo/data').rglob('*') "
+        "if p.is_file()]},"
     )
     text = text.replace(needle, f"{needle}\n{package_data}")
 
-    # GDAL 3.13.x shares mutable compile/link argument lists across Extension
-    # objects. On macOS this can leak -std=c++11 into gdalconst_wrap.c, which is
-    # C and fails with clang. Copy each list per extension. If upstream fixes
-    # this later, the replacement simply becomes a no-op.
     text = text.replace(
         "extra_compile_args=extra_compile_args",
         "extra_compile_args=list(extra_compile_args)",
@@ -38,18 +34,36 @@ def patch_setup(package: Path) -> None:
         "extra_link_args=extra_link_args",
         "extra_link_args=list(extra_link_args)",
     )
+
+    marker = "\nsetup("
+    if marker not in text:
+        raise RuntimeError("Upstream setup.py changed; review free-threaded patch")
+
+    free_threaded = """
+if (__import__('os').name == 'nt' and
+        __import__('sysconfig').get_config_var('Py_GIL_DISABLED')):
+    for extension in ext_modules:
+        extension.define_macros = list(extension.define_macros or [])
+        extension.define_macros.append(('Py_GIL_DISABLED', '1'))
+"""
+    text = text.replace(marker, free_threaded + marker, 1)
+
     setup.write_text(text)
 
 
 def main() -> None:
     release = json.loads((ROOT / "build/release.json").read_text())
+
     source = extract(
         download(release["bindings"], ROOT / "build/bindings.tar.gz"),
         ROOT / "build/bindings-source",
     )
+
     package = ROOT / "build/python"
+
     if package.exists():
         shutil.rmtree(package)
+
     shutil.copytree(source, package)
 
     prefix = Path(os.environ["BUILD_PREFIX"]).resolve()
@@ -58,11 +72,14 @@ def main() -> None:
     for name, required in (("gdal", "gdalvrt.xsd"), ("proj", "proj.db")):
         origin = prefix / "share" / name
         required_path = origin / required
+
         if not required_path.is_file():
             raise RuntimeError(f"Missing mandatory bundled data: {required_path}")
+
         shutil.copytree(origin, osgeo / "data" / name)
 
     licenses = prefix / "share/licenses"
+
     if licenses.exists():
         shutil.copytree(licenses, osgeo / "data/licenses")
 
@@ -89,6 +106,7 @@ def main() -> None:
         stream.write(f"library_dirs = {prefix / 'lib'}\n")
         stream.write("libraries = gdal\n")
         stream.write(f"parallel = {JOBS}\n")
+
         if os.name != "nt":
             stream.write(f"gdal_config = {prefix / 'bin/gdal-config'}\n")
 

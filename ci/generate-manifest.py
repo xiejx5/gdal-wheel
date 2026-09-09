@@ -1,4 +1,4 @@
-"""Release only a complete four-Python, three-platform tested wheel set."""
+"""Validate and publish a complete wheel matrix."""
 
 import argparse
 import hashlib
@@ -25,51 +25,76 @@ def platform_name(tags):
 
 
 def python_key(tag):
-    return int(tag[2:])
+    return int(tag[2:].removesuffix("t")), tag.endswith("t")
 
 
 def generate(directory, results, release, repository):
-    reports = [json.loads(path.read_text()) for path in results.rglob("test-result.json")]
+    reports = [
+        json.loads(path.read_text()) for path in results.rglob("test-result.json")
+    ]
+
     rows = []
     seen = set()
 
     for path in sorted(directory.glob("*.whl")):
         name, version, build, tags = parse_wheel_filename(path.name)
+
         if name != "gdal" or str(version) != release["version"] or build:
             raise ValueError(f"Unexpected wheel: {path.name}")
 
         interpreters = {tag.interpreter for tag in tags}
-        if len(interpreters) != 1:
-            raise ValueError(f"Unexpected multi-ABI wheel: {path.name}")
+        abis = {tag.abi for tag in tags}
 
-        python = interpreters.pop()
-        if not python.startswith("cp") or not python[2:].isdigit():
-            raise ValueError(f"Unsupported Python ABI: {python}")
-        if {tag.abi for tag in tags} != {python}:
-            raise ValueError(f"Unexpected ABI tag: {path.name}")
+        if len(interpreters) != 1 or len(abis) != 1:
+            raise ValueError(f"Unexpected wheel ABI: {path.name}")
+
+        interpreter = interpreters.pop()
+        python = abis.pop()
+
+        if python.endswith("t"):
+            valid = (
+                python.startswith("cp")
+                and python[2:-1].isdigit()
+                and interpreter == python[:-1]
+            )
+        else:
+            valid = (
+                python.startswith("cp")
+                and python[2:].isdigit()
+                and interpreter == python
+            )
+
+        if not valid:
+            raise ValueError(f"Unsupported Python ABI: {path.name}")
 
         platform = platform_name(tags)
         key = (python, platform)
+
         if key in seen:
             raise ValueError(f"Duplicate Python/platform wheel: {key}")
+
         seen.add(key)
 
         matching = [report for report in reports if report.get("wheel") == path.name]
+
         if len(matching) != 1:
             raise ValueError(f"Missing clean-test result: {path.name}")
+
         report = matching[0]
 
         if report.get("feature_tests") != "passed":
             raise ValueError(f"Feature tests failed: {path.name}")
+
         expected_hdf4 = "not-supported" if platform == "windows-x86_64" else "passed"
+
         if report.get("hdf4") != expected_hdf4:
             raise ValueError(f"HDF4 contract mismatch: {path.name}")
 
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
+
         if report.get("sha256") != digest:
             raise ValueError(f"Tested wheel bytes changed: {path.name}")
 
-        (directory / f"{path.name}.sha256").write_text(f"{digest}  {path.name}\n")
         rows.append(
             {
                 "filename": path.name,
@@ -83,14 +108,20 @@ def generate(directory, results, release, repository):
         )
 
     pythons = sorted({python for python, _ in seen}, key=python_key)
-    if len(pythons) != 4:
-        raise ValueError(f"Expected four Python versions, got {pythons}")
+    normal = [python for python in pythons if not python.endswith("t")]
+    threaded = [python for python in pythons if python.endswith("t")]
+
+    if len(normal) != 4 or len(threaded) != 1:
+        raise ValueError(
+            f"Expected four normal CPythons plus one free-threaded ABI, got {pythons}"
+        )
 
     expected = {(python, platform) for python in pythons for platform in PLATFORMS}
+
     if seen != expected:
         raise ValueError(f"Incomplete release: expected {expected}, got {seen}")
 
-    manifest = {
+    record = {
         "schema_version": 1,
         "complete": True,
         "version": release["version"],
@@ -100,14 +131,18 @@ def generate(directory, results, release, repository):
         "wheels": rows,
     }
 
-    (directory / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    (directory / "manifest.json").write_text(json.dumps(record, indent=2) + "\n")
 
-    base = f"https://github.com/{repository}/releases/download/gdal-v{release['version']}"
+    base = (
+        f"https://github.com/{repository}/releases/download/gdal-v{release['version']}"
+    )
+
     links = [
         f'<a href="{base}/{quote(row["filename"])}#sha256={row["sha256"]}">'
-        f'{html.escape(row["filename"])}</a><br>'
+        f"{html.escape(row['filename'])}</a><br>"
         for row in rows
     ]
+
     (directory / "index.html").write_text(
         '<!doctype html>\n<html><head><meta charset="utf-8">'
         "<title>GDAL wheels</title></head><body>\n"
@@ -115,7 +150,7 @@ def generate(directory, results, release, repository):
         + "\n</body></html>\n"
     )
 
-    return manifest
+    return record
 
 
 if __name__ == "__main__":

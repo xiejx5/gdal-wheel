@@ -25,19 +25,29 @@ spec.loader.exec_module(manifest)
 
 
 def python_abis():
-    """Four synthetic ABIs; the real workflow selects versions dynamically."""
+    """Four synthetic normal ABIs plus one synthetic free-threaded ABI."""
     major, minor = sys.version_info[:2]
-    return tuple(f"cp{major}{n}" for n in range(minor - 3, minor + 1))
+    normal = tuple(f"cp{major}{value}" for value in range(minor - 3, minor + 1))
+    return normal + (normal[-1] + "t",)
+
+
+def wheel_tags(python):
+    return (python[:-1], python) if python.endswith("t") else (python, python)
 
 
 def test_digest_mismatch_never_replaces_archive(tmp_path):
     destination = tmp_path / "source.tar"
+
     with patch("urllib.request.urlopen", return_value=io.BytesIO(b"wrong")):
         with pytest.raises(ValueError, match="SHA256 mismatch"):
             sources.download(
-                {"url": "https://example.org/source", "sha256": "0" * 64},
+                {
+                    "url": "https://example.org/source",
+                    "sha256": "0" * 64,
+                },
                 destination,
             )
+
     assert not destination.exists()
     assert not destination.with_suffix(".partial").exists()
 
@@ -45,7 +55,11 @@ def test_digest_mismatch_never_replaces_archive(tmp_path):
 def test_verified_cache_avoids_network(tmp_path):
     destination = tmp_path / "source.tar"
     destination.write_bytes(b"good")
-    with patch("urllib.request.urlopen", side_effect=AssertionError("network")):
+
+    with patch(
+        "urllib.request.urlopen",
+        side_effect=AssertionError("network"),
+    ):
         sources.download(
             {
                 "url": "https://example.org/source",
@@ -57,6 +71,7 @@ def test_verified_cache_avoids_network(tmp_path):
 
 def test_archive_traversal_rejected(tmp_path):
     archive = tmp_path / "evil.tar"
+
     with tarfile.open(archive, "w") as output:
         member = tarfile.TarInfo("../../escaped")
         member.size = 1
@@ -69,7 +84,8 @@ def test_archive_traversal_rejected(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "version", ["3.14.0rc1", "main", "../3.13.3", "3.13.3;echo no"]
+    "version",
+    ["3.14.0rc1", "main", "../3.13.3", "3.13.3;echo no"],
 )
 def test_version_rejects_nonstable_input(version):
     with pytest.raises(ValueError, match="stable semantic"):
@@ -79,6 +95,7 @@ def test_version_rejects_nonstable_input(version):
 def make_release(tmp_path):
     wheels = tmp_path / "wheels"
     results = tmp_path / "results"
+
     wheels.mkdir()
     results.mkdir()
 
@@ -89,13 +106,16 @@ def make_release(tmp_path):
     ]
 
     for python in python_abis():
+        interpreter, abi = wheel_tags(python)
+
         for platform, tag in platforms:
-            name = f"gdal-3.13.3-{python}-{python}-{tag}.whl"
+            name = f"gdal-3.13.3-{interpreter}-{abi}-{tag}.whl"
             wheel = wheels / name
             wheel.write_bytes(name.encode())
 
             result = results / f"{python}-{platform}"
             result.mkdir()
+
             (result / "test-result.json").write_text(
                 json.dumps(
                     {
@@ -116,14 +136,24 @@ def make_release(tmp_path):
 
 def test_complete_release_has_integrity_links(tmp_path):
     wheels, results = make_release(tmp_path)
+
     record = manifest.generate(
-        wheels, results, {"version": "3.13.3"}, "owner/repo"
+        wheels,
+        results,
+        {"version": "3.13.3"},
+        "owner/repo",
     )
 
     expected = len(python_abis()) * 3
+
     assert record["complete"]
     assert len(record["wheels"]) == expected
+    assert (
+        len([python for python in record["python_versions"] if python.endswith("t")])
+        == 1
+    )
     assert (wheels / "index.html").read_text().count("#sha256=") == expected
+    assert not list(wheels.glob("*.sha256"))
 
 
 @pytest.mark.parametrize(
@@ -152,12 +182,16 @@ def test_incomplete_release_rejected(tmp_path, fault):
             "failed-test": "feature_tests",
             "hdf4": "hdf4",
         }[fault]
+
         report[field] = "failed"
         report_path.write_text(json.dumps(report))
 
     with pytest.raises(ValueError):
         manifest.generate(
-            wheels, results, {"version": "3.13.3"}, "owner/repo"
+            wheels,
+            results,
+            {"version": "3.13.3"},
+            "owner/repo",
         )
 
     assert not (wheels / "manifest.json").exists()
@@ -177,11 +211,20 @@ def test_bootstrap_preserves_application_setting(tmp_path):
     (tmp_path / "data/proj").mkdir()
 
     gdal = Gdal()
-    with patch.dict("os.environ", {"PROJ_LIB": "legacy-user-proj"}, clear=True):
+
+    with patch.dict(
+        "os.environ",
+        {"PROJ_LIB": "legacy-user-proj"},
+        clear=True,
+    ):
         exec(
             (ROOT / "ci/bootstrap.py").read_text(),
-            {"__file__": str(tmp_path / "__init__.py"), "_gdal": gdal},
+            {
+                "__file__": str(tmp_path / "__init__.py"),
+                "_gdal": gdal,
+            },
         )
+
         import os
 
         assert gdal.settings["GDAL_DATA"] == "application"
