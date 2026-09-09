@@ -25,10 +25,13 @@ spec.loader.exec_module(manifest)
 
 
 def python_abis():
-    """Four synthetic normal ABIs plus one synthetic free-threaded ABI."""
+    """Three synthetic normal ABIs and all their free-threaded variants."""
     major, minor = sys.version_info[:2]
-    normal = tuple(f"cp{major}{value}" for value in range(minor - 3, minor + 1))
-    return normal + (normal[-1] + "t",)
+    normal = tuple(
+        f"cp{major}{value}"
+        for value in range(minor - 2, minor + 1)
+    )
+    return normal + tuple(f"{python}t" for python in normal)
 
 
 def wheel_tags(python):
@@ -120,7 +123,9 @@ def make_release(tmp_path):
                 json.dumps(
                     {
                         "wheel": name,
-                        "sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
+                        "sha256": hashlib.sha256(
+                            wheel.read_bytes()
+                        ).hexdigest(),
                         "feature_tests": "passed",
                         "hdf4": (
                             "not-supported"
@@ -148,12 +153,35 @@ def test_complete_release_has_integrity_links(tmp_path):
 
     assert record["complete"]
     assert len(record["wheels"]) == expected
-    assert (
-        len([python for python in record["python_versions"] if python.endswith("t")])
-        == 1
-    )
+    assert len(
+        [python for python in record["python_versions"] if python.endswith("t")]
+    ) == 3
     assert (wheels / "index.html").read_text().count("#sha256=") == expected
     assert not list(wheels.glob("*.sha256"))
+
+
+def test_partial_threaded_matrix_is_valid(tmp_path):
+    wheels, results = make_release(tmp_path)
+
+    threaded = [python for python in python_abis() if python.endswith("t")]
+    for python in threaded[:2]:
+        interpreter, abi = wheel_tags(python)
+        for wheel in list(wheels.glob(f"gdal-*-{interpreter}-{abi}-*.whl")):
+            name = wheel.name
+            wheel.unlink()
+            for report in list(results.rglob("test-result.json")):
+                if json.loads(report.read_text()).get("wheel") == name:
+                    report.unlink()
+
+    record = manifest.generate(
+        wheels,
+        results,
+        {"version": "3.13.3"},
+        "owner/repo",
+    )
+
+    assert record["complete"]
+    assert len([p for p in record["python_versions"] if p.endswith("t")]) == 1
 
 
 @pytest.mark.parametrize(

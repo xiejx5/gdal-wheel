@@ -377,7 +377,7 @@ jobs:
               --repo "$REPOSITORY" \
               --target "$TARGET" \
               --title "GDAL ${VERSION} wheels" \
-              --notes "Self-contained GDAL ${VERSION} wheels for the latest four stable CPython versions supported by cibuildwheel. All 12 wheel/platform combinations passed clean-runner tests." \
+              --notes "Self-contained GDAL ${VERSION} wheels. Published only after the complete selected Python/platform matrix passes clean-runner tests." \
               --draft
           else
             echo "$tag is already published; leaving it unchanged."

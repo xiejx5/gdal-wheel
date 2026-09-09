@@ -30,7 +30,8 @@ def python_key(tag):
 
 def generate(directory, results, release, repository):
     reports = [
-        json.loads(path.read_text()) for path in results.rglob("test-result.json")
+        json.loads(path.read_text())
+        for path in results.rglob("test-result.json")
     ]
 
     rows = []
@@ -75,7 +76,10 @@ def generate(directory, results, release, repository):
 
         seen.add(key)
 
-        matching = [report for report in reports if report.get("wheel") == path.name]
+        matching = [
+            report for report in reports
+            if report.get("wheel") == path.name
+        ]
 
         if len(matching) != 1:
             raise ValueError(f"Missing clean-test result: {path.name}")
@@ -85,7 +89,11 @@ def generate(directory, results, release, repository):
         if report.get("feature_tests") != "passed":
             raise ValueError(f"Feature tests failed: {path.name}")
 
-        expected_hdf4 = "not-supported" if platform == "windows-x86_64" else "passed"
+        expected_hdf4 = (
+            "not-supported"
+            if platform == "windows-x86_64"
+            else "passed"
+        )
 
         if report.get("hdf4") != expected_hdf4:
             raise ValueError(f"HDF4 contract mismatch: {path.name}")
@@ -111,12 +119,16 @@ def generate(directory, results, release, repository):
     normal = [python for python in pythons if not python.endswith("t")]
     threaded = [python for python in pythons if python.endswith("t")]
 
-    if len(normal) != 4 or len(threaded) != 1:
+    if len(normal) != 3 or any(python[:-1] not in normal for python in threaded):
         raise ValueError(
-            f"Expected four normal CPythons plus one free-threaded ABI, got {pythons}"
+            f"Expected three normal CPythons and only their free-threaded variants, got {pythons}"
         )
 
-    expected = {(python, platform) for python in pythons for platform in PLATFORMS}
+    expected = {
+        (python, platform)
+        for python in pythons
+        for platform in PLATFORMS
+    }
 
     if seen != expected:
         raise ValueError(f"Incomplete release: expected {expected}, got {seen}")
@@ -127,19 +139,25 @@ def generate(directory, results, release, repository):
         "version": release["version"],
         "python_versions": pythons,
         "upstream": release,
-        "platforms": {platform: "passed" for platform in sorted(PLATFORMS)},
+        "platforms": {
+            platform: "passed"
+            for platform in sorted(PLATFORMS)
+        },
         "wheels": rows,
     }
 
-    (directory / "manifest.json").write_text(json.dumps(record, indent=2) + "\n")
+    (directory / "manifest.json").write_text(
+        json.dumps(record, indent=2) + "\n"
+    )
 
     base = (
-        f"https://github.com/{repository}/releases/download/gdal-v{release['version']}"
+        f"https://github.com/{repository}/releases/download/"
+        f"gdal-v{release['version']}"
     )
 
     links = [
         f'<a href="{base}/{quote(row["filename"])}#sha256={row["sha256"]}">'
-        f"{html.escape(row['filename'])}</a><br>"
+        f'{html.escape(row["filename"])}</a><br>'
         for row in rows
     ]
 

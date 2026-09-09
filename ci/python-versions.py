@@ -1,4 +1,4 @@
-"""Select proven normal and free-threaded CPython versions."""
+"""Select proven Python ABIs for the wheel matrix."""
 
 from importlib.metadata import version
 import json
@@ -18,6 +18,16 @@ def output(name, value):
         print(f"{name}={value}", file=stream)
 
 
+def tag_key(tag):
+    digits = tag[2:].removesuffix("t")
+    return int(digits[0]), int(digits[1:])
+
+
+def python_version(tag):
+    major, minor = tag_key(tag)
+    return f"{major}.{minor}" + ("t" if tag.endswith("t") else "")
+
+
 def conda_pythons(gdal_version):
     url = f"https://api.anaconda.org/release/conda-forge/gdal/{gdal_version}"
 
@@ -32,6 +42,9 @@ def conda_pythons(gdal_version):
     found = {platform: set() for platform in PLATFORMS}
 
     for dist in distributions:
+        if "main" not in dist.get("labels", ["main"]):
+            continue
+
         attrs = dist["attrs"]
         platform = attrs.get("subdir")
 
@@ -44,16 +57,6 @@ def conda_pythons(gdal_version):
                 found[platform].add(match.group(1))
 
     return set.intersection(*found.values())
-
-
-def tag_key(tag):
-    return int(tag[2:].removesuffix("t"))
-
-
-def python_version(tag):
-    digits = tag[2:].removesuffix("t")
-    suffix = "t" if tag.endswith("t") else ""
-    return f"{digits[0]}.{digits[1:]}{suffix}"
 
 
 identifiers = subprocess.check_output(
@@ -77,23 +80,28 @@ cibw = {
     if (match := re.match(r"^(cp\d+t?)-", line))
 }
 
-supported = conda_pythons(os.environ["GDAL_VERSION"]) & cibw
+# actions/setup-python "3.x" gives this job the latest stable CPython.
+# This prevents a release-candidate ABI from entering the matrix early.
+stable = sys.version_info[:2]
+
+supported = {
+    tag
+    for tag in conda_pythons(os.environ["GDAL_VERSION"]) & cibw
+    if tag_key(tag) <= stable
+}
 
 normal = sorted(
     (tag for tag in supported if not tag.endswith("t")),
     key=tag_key,
-)[-4:]
+)[-3:]
 
-threaded = sorted(
-    (tag for tag in supported if tag.endswith("t")),
-    key=tag_key,
-)[-1:]
-
-if len(normal) < 4 or not threaded:
+if len(normal) < 3:
     print("conda-forge is not ready:", ", ".join(sorted(supported, key=tag_key)))
     output("ready", "false")
     raise SystemExit
 
+# Include every proven free-threaded counterpart of the selected three.
+threaded = [f"{tag}t" for tag in normal if f"{tag}t" in supported]
 selected = normal + threaded
 
 output("ready", "true")

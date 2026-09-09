@@ -157,7 +157,8 @@ def build_dependency(name: str, record: dict) -> None:
             "--libdir=lib",
             cwd=source,
         )
-        run("make", f"-j{JOBS}", "install_sw", cwd=source)
+        run("make", f"-j{JOBS}", cwd=source)
+        run("make", "install_sw", cwd=source)
     else:
         cmake(source / record["subdir"], name, record["cmake"])
 
