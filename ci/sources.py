@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def get_json(url):
-    headers = {'Accept': 'application/vnd.github+json', 'User-Agent': 'gdal-wheels'}
+    headers = {'Accept': 'application/vnd.github+json', 'User-Agent': 'gdal-wheel'}
     if url.startswith('https://api.github.com/') and os.environ.get('GH_TOKEN'):
         headers['Authorization'] = 'Bearer ' + os.environ['GH_TOKEN']
     with urllib.request.urlopen(

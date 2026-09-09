@@ -1,7 +1,7 @@
 [project]
 name = "gdal-wheel"
 version = "3.13.3"
-description = "Unofficial, self-contained GDAL binary wheels with NumPy bindings."
+description = "Unofficial GDAL binary wheels."
 readme = "README.md"
 license = "MIT"
 keywords = ["gdal", "gis", "geospatial"]

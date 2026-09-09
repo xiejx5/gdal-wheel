@@ -1,36 +1,52 @@
-# GDAL binary wheel
+# GDAL wheel
 
-Unofficial, self-contained [GDAL](https://github.com/OSGeo/gdal) binary wheels with NumPy bindings.
+Unofficial, self-contained [GDAL](https://github.com/OSGeo/gdal) binary wheels with NumPy bindings for Linux, macOS, and Windows.
 
-Wheels are built for Linux, macOS, and Windows, tested on clean runners, and published to PyPI and GitHub Releases.
+There are two ways to install them.
 
-## Install
+## 1. Install `gdal-wheel` from PyPI
 
 ```bash
 uv add gdal-wheel
 ```
 
-The distribution name is `gdal-wheel`; the Python import remains the standard GDAL import:
+The package name is `gdal-wheel`, but the Python import stays the same:
 
 ```python
 from osgeo import gdal
-print(gdal.VersionInfo("--version"))
 ```
 
-Do not install the separate `GDAL` distribution in the same environment because both provide `osgeo`.
+## 2. Install `gdal` from the Cloudflare wheel index
+
+Package index: [gdal.xiejx5.workers.dev](https://gdal.xiejx5.workers.dev)
+
+Add this to `pyproject.toml`:
+
+```toml
+[tool.uv]
+no-build-package = ["gdal"]
+
+[tool.uv.sources]
+gdal = { index = "gdal-wheel" }
+
+[[tool.uv.index]]
+name = "gdal-wheel"
+url = "https://gdal.xiejx5.workers.dev"
+format = "flat"
+explicit = true
+```
+
+Then install:
+
+```bash
+uv add gdal
+```
 
 ## Releases
 
-GitHub Actions checks every three months for the newest stable GDAL release.
+The GitHub Action checks once a month for a new stable GDAL release.
 
-A release is published only after the complete wheel set passes clean-runner tests on:
+`gdal-wheel` uses the same version as GDAL. For example, GDAL `3.13.3` is published as `gdal-wheel==3.13.3`.
 
-- Linux x86_64
-- macOS ARM64
-- Windows x86_64
-- the latest three proven-compatible CPython versions
-- all proven free-threaded counterparts of those selected Python versions
-
-The version of `gdal-wheel` follows the upstream GDAL version.
-
-Browse the [GitHub Releases](https://github.com/xiejx5/gdal-wheel/releases).
+- PyPI receives the `gdal-wheel` wheels.
+- GitHub Releases keep `GDAL`-named wheels for the Cloudflare index.

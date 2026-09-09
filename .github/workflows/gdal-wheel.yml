@@ -1,8 +1,9 @@
-name: GDAL wheels
+name: GDAL wheel
 
 on:
   schedule:
-    - cron: "17 3 1 */3 *"
+    # Check for a new stable GDAL release once a month.
+    - cron: "17 3 1 * *"
   workflow_dispatch:
     inputs:
       gdal_version:
@@ -33,6 +34,8 @@ jobs:
       python_versions: ${{ steps.python.outputs.python_versions }}
       cibw_build: ${{ steps.python.outputs.cibw_build }}
       cibuildwheel_version: ${{ steps.python.outputs.cibuildwheel_version }}
+      github_state: ${{ steps.decide.outputs.github_state }}
+      pypi_exists: ${{ steps.decide.outputs.pypi_exists }}
 
     steps:
       - uses: actions/checkout@v7
@@ -50,19 +53,31 @@ jobs:
         run: python ci/sources.py --version "$REQUESTED_VERSION"
 
       - id: decide
-        name: Check release state
+        name: Check GitHub Release and PyPI state
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.resolve.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
-          tag="gdal-wheel-v${VERSION}"
+          tag="gdal-v${VERSION}"
           state="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' 2>/dev/null || echo missing)"
 
-          echo "state=$state" >> "$GITHUB_OUTPUT"
-          if [[ "$state" == "false" ]] ||
-             [[ "$state" == "true" && "${{ github.event_name }}" == "schedule" ]]; then
+          pypi_status="$(curl --retry 3 --retry-delay 2 -sS -o /dev/null -w '%{http_code}' \
+            "https://pypi.org/pypi/gdal-wheel/${VERSION}/json")"
+          case "$pypi_status" in
+            200) pypi_exists=true ;;
+            404) pypi_exists=false ;;
+            *)
+              echo "Unexpected PyPI status: $pypi_status" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "github_state=$state" >> "$GITHUB_OUTPUT"
+          echo "pypi_exists=$pypi_exists" >> "$GITHUB_OUTPUT"
+
+          if [[ "$state" == "false" && "$pypi_exists" == "true" ]]; then
             echo "check=false" >> "$GITHUB_OUTPUT"
           else
             echo "check=true" >> "$GITHUB_OUTPUT"
@@ -80,13 +95,13 @@ jobs:
         run: python ci/python-versions.py
 
       - name: Mark build attempt
-        if: steps.python.outputs.ready == 'true' && steps.decide.outputs.state == 'missing'
+        if: steps.python.outputs.ready == 'true' && steps.decide.outputs.github_state == 'missing'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.resolve.outputs.version }}
         shell: bash
         run: |
-          gh release create "gdal-wheel-v${VERSION}" \
+          gh release create "gdal-v${VERSION}" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "GDAL ${VERSION} wheels" \
@@ -137,7 +152,6 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
-
       - uses: actions/download-artifact@v8
         with:
           name: verified-source
@@ -279,7 +293,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-
       - uses: actions/download-artifact@v8
         with:
           name: wheels-${{ matrix.target.platform }}
@@ -333,7 +346,7 @@ jobs:
 
       - run: python -m pip install -q packaging
 
-      - name: Gate complete release and generate hashes/index
+      - name: Gate complete release
         env:
           REPOSITORY: ${{ github.repository }}
         run: python ci/generate-manifest.py --repository "$REPOSITORY"
@@ -345,29 +358,102 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
-  publish:
-    name: Publish release
+  publish_pypi:
+    name: Publish gdal-wheel to PyPI
     needs: [source, manifest]
-    if: needs.source.outputs.should_build == 'true'
+    if: needs.source.outputs.should_build == 'true' && needs.source.outputs.pypi_exists != 'true'
     runs-on: ubuntu-24.04
     environment:
       name: pypi
       url: https://pypi.org/p/gdal-wheel
     permissions:
-      contents: write
+      actions: read
+      contents: read
       id-token: write
 
     steps:
-      - uses: actions/checkout@v7
-
       - uses: actions/download-artifact@v8
         with:
           name: tested-release
           path: release
 
-      - uses: astral-sh/setup-uv@v10.0.1
+      - name: Select PyPI wheels only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp release/gdal_wheel-*.whl dist/
+          test -n "$(find dist -maxdepth 1 -name 'gdal_wheel-*.whl' -print -quit)"
 
-      - name: Upload tested wheels and publish GitHub release
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          print-hash: true
+
+  publish_github:
+    name: Publish GitHub Release
+    needs: [source, manifest, publish_pypi]
+    if: >-
+      always() &&
+      needs.source.outputs.should_build == 'true' &&
+      needs.manifest.result == 'success' &&
+      needs.source.outputs.github_state != 'false' &&
+      (needs.publish_pypi.result == 'success' || needs.publish_pypi.result == 'skipped')
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: tested-release
+          path: release
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - name: Prepare GDAL wheels for GitHub Release
+        env:
+          REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ needs.source.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -q wheel
+          mkdir -p github unpacked
+
+          for file in release/gdal_wheel-*.whl; do
+            rm -rf unpacked/*
+            python -m wheel unpack "$file" -d unpacked
+            dir="$(find unpacked -mindepth 1 -maxdepth 1 -type d -print -quit)"
+            info="$(find "$dir" -maxdepth 1 -type d -name 'gdal_wheel-*.dist-info' -print -quit)"
+            new_info="$(basename "$info" | sed 's/^gdal_wheel-/GDAL-/')"
+            mv "$info" "$dir/$new_info"
+            sed -i 's/^Name: gdal-wheel$/Name: GDAL/' "$dir/$new_info/METADATA"
+
+            data="$(find "$dir" -maxdepth 1 -type d -name 'gdal_wheel-*.data' -print -quit)"
+            if [[ -n "$data" ]]; then
+              mv "$data" "$dir/$(basename "$data" | sed 's/^gdal_wheel-/GDAL-/')"
+            fi
+
+            python -m wheel pack "$dir" -d github
+          done
+
+          base="https://github.com/${REPOSITORY}/releases/download/gdal-v${VERSION}"
+          {
+            echo '<!doctype html><html><body>'
+            for file in github/GDAL-*.whl; do
+              name="$(basename "$file")"
+              hash="$(sha256sum "$file" | cut -d' ' -f1)"
+              printf '<a href="%s/%s#sha256=%s">%s</a><br>\n' "$base" "$name" "$hash" "$name"
+            done
+            echo '</body></html>'
+          } > github/index.html
+
+      - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -376,46 +462,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tag="gdal-wheel-v${VERSION}"
+          tag="gdal-v${VERSION}"
           state="$(gh release view "$tag" --repo "$REPOSITORY" --json isDraft --jq '.isDraft' 2>/dev/null || echo missing)"
+
           if [[ "$state" == "true" ]]; then
-            gh release upload "$tag" release/* --repo "$REPOSITORY" --clobber
+            gh release upload "$tag" github/* --repo "$REPOSITORY" --clobber
           elif [[ "$state" == "missing" ]]; then
-            gh release create "$tag" release/* \
+            gh release create "$tag" github/* \
               --repo "$REPOSITORY" \
               --target "$TARGET" \
               --title "GDAL ${VERSION} wheels" \
-              --notes "Self-contained GDAL ${VERSION} wheels. Published only after the complete selected Python/platform matrix passes clean-runner tests." \
+              --notes "Self-contained GDAL ${VERSION} wheels for the flat package index." \
               --draft
           else
             echo "$tag is already published; leaving it unchanged."
             exit 0
           fi
+
           gh release edit "$tag" --repo "$REPOSITORY" --draft=false
-
-      - name: Publish wheels to PyPI
-        run: uv publish 'release/*.whl'
-
-      - name: Update tracked GDAL version
-        if: github.ref == 'refs/heads/main'
-        env:
-          VERSION: ${{ needs.source.outputs.version }}
-        shell: bash
-        run: |
-          git pull --rebase origin main
-          if python - <<'PY'
-          import os
-          import tomllib
-
-          current = tomllib.load(open('pyproject.toml', 'rb'))['project']['version']
-          new = os.environ['VERSION']
-          raise SystemExit(0 if tuple(map(int, new.split('.'))) > tuple(map(int, current.split('.'))) else 1)
-          PY
-          then
-            uv version "$VERSION" --frozen
-            git config user.name github-actions[bot]
-            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-            git add pyproject.toml
-            git commit -m "chore: update GDAL to ${VERSION}"
-            git push origin HEAD:main
-          fi
