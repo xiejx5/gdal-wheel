@@ -6,8 +6,8 @@ import zipfile
 
 
 REQUIRED = {
-    "osgeo/data/gdal/gdalvrt.xsd",
-    "osgeo/data/proj/proj.db",
+    'osgeo/data/gdal/gdalvrt.xsd',
+    'osgeo/data/proj/proj.db',
 }
 
 
@@ -19,13 +19,13 @@ def main() -> None:
 
     missing = sorted(REQUIRED - names)
     if missing:
-        raise RuntimeError(f"Missing packaged data: {missing}")
+        raise RuntimeError(f'Missing packaged data: {missing}')
 
-    if not any(name.startswith("osgeo/_gdal") for name in names):
-        raise RuntimeError("Missing osgeo._gdal extension")
+    if not any(name.startswith('osgeo/_gdal') for name in names):
+        raise RuntimeError('Missing osgeo._gdal extension')
 
-    print(f"Wheel content OK: {wheel.name}")
+    print(f'Wheel content OK: {wheel.name}')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
